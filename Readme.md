@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the **Julia implementation (Dev version)** of the ICAPS 2025 paper:  
+This repository contains the **Julia implementation** of the ICAPS 2025 paper:  
 > **Partially Observable Monte-Carlo Graph Search**  
 > *Yang You, Vincent Thomas, Alex Schutz, Robert Skilton, Nick Hawes, Olivier Buffet*
 
