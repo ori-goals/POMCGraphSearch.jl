@@ -73,6 +73,18 @@ pomcgs = POMCGS(pomdp;
 Solve(pomcgs)  # solve the problem
 ```
 
+### Saving FSC Policies
+
+```Julia
+SaveFSCPolicyJSON(pomcgs.fsc) # save the fsc policy to a JSON file
+```
+
+or 
+
+```Julia
+SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
+```
+
 ---
 
 ## Citation
