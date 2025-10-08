@@ -1,4 +1,4 @@
-using POMCGS
+using POMCGraphSearch
 using Test
 using POMDPs
 using Random
@@ -7,18 +7,18 @@ using POMDPTools
 @testset "POMCGS Basic Tests" begin
 
     @testset "Package Loading" begin
-        @test isdefined(Main, :POMCGS)
+        @test isdefined(Main, :POMCGraphSearch)
         println("✓ Package loaded successfully")
     end
 
     @testset "Type Definitions" begin
-        @test isdefined(POMCGS, :SolverPOMCGS)
+        @test isdefined(POMCGraphSearch, :SolverPOMCGS)
         println("✓ SolverPOMCGS type defined")
     end
 
     @testset "Key Functions Exist" begin
         for fname in [:Solve, :detect_action_space, :detect_state_space, :detect_observation_space]
-            @test isdefined(POMCGS, fname)
+            @test isdefined(POMCGraphSearch, fname)
         end
         println("✓ Key functions defined")
     end

@@ -1,4 +1,4 @@
-module POMCGS
+module POMCGraphSearch
 
 using JLD2
 using JSON

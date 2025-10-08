@@ -14,7 +14,7 @@ The repository implements POMCGS, an offline planning algorithm that performs Mo
 
 | File | Description |
 |------|-------------|
-| `./POMCGS.jl` | Main POMCGS algorithm |
+| `./POMCGraphSearch.jl` | Main POMCGS algorithm |
 | `./DiscretePlanner.jl` | Discrete POMDP planner version |
 | `./ContinuousPlanner.jl` | Continuous POMDP planner version |
 | `./FSC.jl` | Defines the FSC data structure used during planning |
@@ -30,19 +30,19 @@ You will need [Julia](https://julialang.org/) installed to run the examples.
 Then you need install POMCGS via
 ```Julia
 using Pkg
-Pkg.add("POMCGS")
+Pkg.add("POMCGraphSearch")
 ```
 
 ### Example 1 — RockSample
 
 ```julia
-using POMCGS
+using POMCGraphSearch
 
 using RockSample  # include the RockSample problem
 
 pomdp = RockSamplePOMDP(7, 8)  # define a RockSample problem
 
-pomcgs = POMCGS(pomdp;
+pomcgs = POMCGraphSearch(pomdp;
     max_b_gap = 0.1, # the belief merging threshold
     max_search_depth = 30,
     nb_process_action_samples = 1000 # the number of simulations needed for processing each action
@@ -56,13 +56,13 @@ Solve(pomcgs)  # solve the problem
 ### Example 2 — LightDark
 
 ```julia
-using POMCGS 
+using POMCGraphSearch 
 
 using POMDPModels
 
 pomdp = LightDark1D()  # define the LightDark problem
 
-pomcgs = POMCGS(pomdp;
+pomcgs = POMCGraphSearch(pomdp;
     max_b_gap = 0.2, 
     state_grid = [1.0, 1.0], # the state grid for state discretization
     num_fixed_observations = 10, # the number of observation clusters
