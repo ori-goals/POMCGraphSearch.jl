@@ -18,7 +18,14 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
 POMDPs = "0.9.6"
-julia = "1.6"
+julia = "1.9"
+CSV = "0.10"
+Clustering = "0.15"
+DataFrames = "1.8"
+JLD2 = "0.6"
+JSON = "1"
+OrderedCollections = "1.8"
+
 
 [extras]
 POMDPTools = "7588e00f-9cae-40de-98dc-e0c70c48cdd7"
