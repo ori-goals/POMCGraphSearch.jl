@@ -25,35 +25,60 @@ The repository implements POMCGS, an offline planning algorithm that performs Mo
 
 ## Getting Started
 
-You will need [Julia](https://julialang.org/) installed to run the examples.
+### Recommended Setup
 
-Then you need install POMCGS via
-```Julia
+> **Important**: Before using POMCGraphSearch, we recommend creating a **new Julia environment** to avoid dependency conflicts:
+
+```julia
 using Pkg
+Pkg.activate("ExamplePOMCGSEnv")  # create a clean environment
 Pkg.add("POMCGraphSearch")
 ```
 
-### Example 1 — RockSample
+### Enable multi-threading to fully utilize the algorithm:
+>
+> The simplest way is to start Julia with the desired number of threads:
+>
+> ```bash
+> julia --threads 8
+> ```
+>
+> Then in Julia:
+> ```julia
+> Threads.nthreads()  # should show 8
+> ```
 
+### Example Minimal Usage
 ```julia
 using POMCGraphSearch
-
 using RockSample  # include the RockSample problem
 
 pomdp = RockSamplePOMDP(7, 8)  # define a RockSample problem
-
-pomcgs = SolverPOMCGS(pomdp;
-    max_b_gap = 0.1, # the belief merging threshold
-    max_search_depth = 30,
-    nb_process_action_samples = 1000 # the number of simulations needed for processing each action
-)  # Initialize the POMCGS solver. It will automatically use the discrete planner for this problem.
+pomcgs = SolverPOMCGS(pomdp)   # Initialize the POMCGS solver using default parameters
 
 Solve(pomcgs)  # solve the problem
 ```
 
+### Example — RockSample (with parameters)
+
+```julia
+using POMCGraphSearch
+using RockSample
+
+pomdp = RockSamplePOMDP(7, 8)
+
+pomcgs = SolverPOMCGS(pomdp;
+    max_b_gap = 0.1,                # belief merging threshold
+    max_search_depth = 30,          # maximum search depth
+    nb_process_action_samples = 1000 # simulations per action
+)
+
+Solve(pomcgs)
+```
+
 ---
 
-### Example 2 — LightDark
+### Example — LightDark (cintinuous POMDP)
 
 ```julia
 using POMCGraphSearch 
@@ -72,6 +97,7 @@ pomcgs = SolverPOMCGS(pomdp;
 
 Solve(pomcgs)  # solve the problem
 ```
+---
 
 ### Saving FSC Policies
 
@@ -84,6 +110,36 @@ or
 ```Julia
 SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 ```
+
+---
+
+### Core POMCGS Planning Parameters
+
+| Parameter                   | Default  | Description                                                                                  |
+|------------------------------|---------|----------------------------------------------------------------------------------------------|
+| `max_b_gap`                  | `0.1`   | Belief merging threshold; controls granularity of the belief graph. *(0.1 = tight, larger = faster planning but coarser graph)* |
+| `max_search_depth`           | `50`    | Maximum search depth for tree search.                                                       |
+| `nb_process_action_samples`  | `1000`  | Number of simulations per action.                                                           |
+| `epsilon`                    | `0.1`   | Algorithm stops when U-L < epsilon (convergence threshold).                                 |
+| `min_num_particles`          | `10000` | Number of particles sampled from the initial belief `b_0`.                                  |
+| `state_grid`                 | `[]`    | Grid for discretizing continuous states (used only for continuous-state POMDPs).           |
+| `num_fixed_observations`     | `10`    | Number of observation clusters (used only for continuous-observation POMDPs).              |
+
+
+### Q-learning Initialization Parameters (for MDP upper bound)
+
+During initialization, POMCGS uses Q-learning to compute an approximate MDP value for the upper bound.  
+The default values should work for most POMDPs tested in the paper.  
+If initialization is too slow, inaccurate, or gives unexpected results, you can adjust the following parameters:
+
+| Parameter          | Default  | Description |
+|-------------------|---------|-------------|
+| `nb_episode_size`  | `30`    | Number of steps per episode in the Q-learning initialization. |
+| `nb_max_episode`   | `20`    | Maximum number of episodes to run during initialization. |
+| `nb_samples_VMDP`  | `5000`  | Number of samples used to estimate the MDP value function. |
+| `nb_sim_VMDP`      | `10`    | Number of simulations per sample for value estimation. |
+| `epsilon_VMDP`     | `0.01`  | Convergence threshold for Q-learning value computation. |
+
 
 ---
 
