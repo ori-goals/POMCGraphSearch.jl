@@ -42,7 +42,7 @@ using RockSample  # include the RockSample problem
 
 pomdp = RockSamplePOMDP(7, 8)  # define a RockSample problem
 
-pomcgs = POMCGraphSearch(pomdp;
+pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.1, # the belief merging threshold
     max_search_depth = 30,
     nb_process_action_samples = 1000 # the number of simulations needed for processing each action
@@ -62,7 +62,7 @@ using POMDPModels
 
 pomdp = LightDark1D()  # define the LightDark problem
 
-pomcgs = POMCGraphSearch(pomdp;
+pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.2, 
     state_grid = [1.0, 1.0], # the state grid for state discretization
     num_fixed_observations = 10, # the number of observation clusters
