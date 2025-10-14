@@ -436,17 +436,20 @@ function GetValueQMDP(
 
         # For each belief particle (state s)
         for (s, pb) in b
-            # Step_batch returns multiple (sp, o, r) samples
-            vector_steps = Step_batch(model, s, a)
+            # Get transition distribution (Dict format)
+            transitions = Step_batch(model, s, a)
 
-            @inbounds for (sp, _, r) in vector_steps
-                temp_value += pb * (r + discount_factor * GetV(Q_learning_policy, sp))
-                total_weight += pb
+            # Iterate over all possible transitions with probabilities
+            for ((sp, _), (prob, avg_r)) in transitions
+                # Use probability-weighted expected value
+                # prob: P(sp,o|s,a), avg_r: expected reward
+                temp_value += pb * prob * (avg_r + discount_factor * GetV(Q_learning_policy, sp))
+                total_weight += pb * prob
             end
         end
 
         if total_weight > 0
-            temp_value /= total_weight
+            temp_value /= total_weight  # Normalize
         end
 
         Q_actions[a] = temp_value

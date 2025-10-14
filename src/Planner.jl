@@ -260,29 +260,49 @@ function CollectSamplesAndBuildNewBeliefsWeightedParticles(
     sum_R_a = 0.0
     sum_all_weights = 0.0
 
-    # Iterate directly over weighted particles
     for (s, w) in weighted_particles
-        steps = Step_batch(model, s, a)
+        if !haskey(model.Cache_sa_to_index, (s, a))
+            Process_new_sa(model, s, a)
+        end
+        saI = model.Cache_sa_to_index[(s, a)]
+        
+        if haskey(model.obs_index_cache, saI)
+            transitions_for_o = model.obs_index_cache[saI]
+            
+            for (o, sp_probs) in transitions_for_o
+                for (sp, prob) in sp_probs
+                    key = (sp, o)
+                    avg_r = model.Cache_steps[saI][key][2]  
+                    
+                    transition_weight = w * prob
+                    sum_R_a += avg_r * transition_weight
+                    sum_all_weights += transition_weight
 
-        @inbounds for (sp, o, r) in steps
-            sum_R_a += r * w
-            sum_all_weights += w
+                    all_oI_weight[o] = get(all_oI_weight, o, 0.0) + transition_weight
 
-            # Retrieve or initialize observation dictionary
-            odict = get!(all_dict_weighted_samples, o, OrderedDict{Int, Float64}())
-            all_oI_weight[o] = get(all_oI_weight, o, 0.0) + w
+                    odict = get!(all_dict_weighted_samples, o, OrderedDict{Int, Float64}())
+                    odict[sp] = get(odict, sp, 0.0) + transition_weight
+                end
+            end
+        else
+            transitions = Step_batch(model, s, a)
+            for ((sp, o), (prob, avg_r)) in transitions
+                transition_weight = w * prob
+                sum_R_a += avg_r * transition_weight
+                sum_all_weights += transition_weight
 
-            # Accumulate next-state weight
-            odict[sp] = get(odict, sp, 0.0) + w
+                all_oI_weight[o] = get(all_oI_weight, o, 0.0) + transition_weight
+
+                odict = get!(all_dict_weighted_samples, o, OrderedDict{Int, Float64}())
+                odict[sp] = get(odict, sp, 0.0) + transition_weight
+            end
         end
     end
 
-    # Normalize reward safely
     sum_R_a = (sum_all_weights > 0) ? (sum_R_a / sum_all_weights) : 0.0
 
     return sum_R_a, sum_all_weights, all_oI_weight, all_dict_weighted_samples
 end
-
 
 
 

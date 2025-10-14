@@ -83,7 +83,6 @@ function EstiValueQlearning(Q_learning_Policy::Qlearning, nb_sim::Int64, s_input
         s = deepcopy(s_input)
         while (gamma^step) > epsilon && isterminal(model, s) == false
             a_selected = ChooseActionQlearning(Q_learning_Policy, s)
-            # sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a_selected)
             sp, o, r = Step(model, s, a_selected)
             UpdateRmaxRmin(Q_learning_Policy, r)
             old_Q = GetQ(Q_learning_Policy, s, a_selected) 

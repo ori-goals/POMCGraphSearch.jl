@@ -9,6 +9,7 @@ using OrderedCollections
 using Printf
 using DataFrames, CSV
 using LinearAlgebra
+using StatsBase
 
 include("ModelWrapper.jl")
 include("Qlearning.jl")
