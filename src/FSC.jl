@@ -1,42 +1,39 @@
-mutable struct FscNode{S}
-    _state_particles::Vector{S} # Vector of particles, each particle is of type S
-    _Q_action::Dict{Any,Float64}
-    _Heuristic_Q_action::Dict{Any,Float64}
-    _R_action::Dict{Any,Float64} # expected instant reward 
-    _visits_action::Dict{Any,Int64}
+mutable struct FscNode{A}
+    _Q_action::Dict{A,Float64}
+    _Heuristic_Q_action::Dict{A,Float64}
+    _R_action::Dict{A,Float64} # expected instant reward 
+    _visits_action::Dict{A,Int64}
     _visits_node::Int64
     _V_node::Float64
-    _best_action::Any
-    _dict_weighted_samples::OrderedDict{Any,Float64}
-    _actions::Vector{Any} # for continuous action space, store the sampled actions
+    _best_action::A
+    _dict_weighted_samples::OrderedDict{Int,Float64} # state index -> weight, state index is handled by ModelWrapper
+    _actions::Vector{A} # for continuous action space, store the sampled actions
 end
 
 
-mutable struct FSC
-    _eta::Vector{Dict{Pair{Any,Int64},Int64}}
+mutable struct FSC{A, O, ASpace, OSpace}
+    _eta::Vector{Dict{Pair{A,O},Int64}}
     _nodes_VQMDP_labels::Vector{Float64} # node index -> VQMDP label
-    _obs_kmeans_centroids::Vector{Vector{Float64}}
+    _obs_kmeans_centroids::Matrix{Float64} # each column is a centroid
     _nodes::Vector{FscNode}
     _max_accept_belief_gap::Float64
     _max_node_size::Int64
-    _action_space::Any
-    _observation_space::Any
-    _dict_trans_func::Dict{Any,Dict{Any,Dict{Any,Float64}}} # a->s->s'
-    _dict_obs_func::Dict{Any,Dict{Any,Dict{Any,Float64}}} # a->s'->o
-    _dict_process_a_s::Dict{Pair{Any,Any},Bool} # (a, s) -> bool
+    _action_space::ASpace
+    _observation_space::OSpace
     _flag_unexpected_obs::Int64
     _prunned_node_list::Vector{Int64}
-    _map_discrete2continuous_states::Dict{Vector{Float64}, Vector{Any}}
 end
 
-function InitFscNode(action_space)
+function InitFscNode(action_space::ASpace) where {ASpace}
+    A = eltype(action_space)
+    best_action = first(action_space)
+
     init_actions = []
-    init_particles = []
     # --- init for actions ---
-    init_Q_action = Dict{Any,Float64}()
-    init_heuristic_Q_action = Dict{Any,Float64}()
-    init_R_action = Dict{Any,Float64}()
-    init_visits_action = Dict{Any,Int64}()
+    init_Q_action = Dict{A,Float64}()
+    init_heuristic_Q_action = Dict{A,Float64}()
+    init_R_action = Dict{A,Float64}()
+    init_visits_action = Dict{A,Int64}()
     for a in action_space
         init_Q_action[a] = 0.0
         init_heuristic_Q_action[a] = 0.0
@@ -48,42 +45,37 @@ function InitFscNode(action_space)
     init_visits_node = 0
     init_V_node = 0.0
     # --- Weighted Particles ----
-    init_dict_weighted_particles = OrderedDict{Any,Float64}()
-    return FscNode(init_particles,
-        init_Q_action,
-        init_heuristic_Q_action,
-        init_R_action,
-        init_visits_action,
-        init_visits_node,
-        init_V_node,
-        nothing,
-        init_dict_weighted_particles,
-        init_actions)
-
+    init_dict_weighted_particles = OrderedDict{Int,Float64}()
+    return FscNode{A}(init_Q_action,
+                    init_heuristic_Q_action,
+                    init_R_action,
+                    init_visits_action,
+                    init_visits_node,
+                    init_V_node,
+                    best_action,
+                    init_dict_weighted_particles,
+                    init_actions)
 end
 
-function CreateNode(b::Vector{S}, weighted_b::OrderedDict{Any, Float64}, action_space) where {S}
+function CreateNode(weighted_b::OrderedDict{Int, Float64}, action_space::ASpace) where {ASpace}
     node = InitFscNode(action_space)
-    node._state_particles = b
     node._dict_weighted_samples = weighted_b
     return node
 end
 
 
-function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_space, observation_space)
-    init_eta = Vector{Dict{Pair{Any,Int64},Int64}}(undef, max_node_size)
+function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_space::ASpace, observation_space::OSpace) where {ASpace, OSpace}
+    A = eltype(action_space)
+    O = eltype(observation_space)
+    init_eta = Vector{Dict{Pair{A,O},Int64}}(undef, max_node_size)
     for i in range(1, stop=max_node_size)
-        init_eta[i] = Dict{Pair{Any,Int64},Int64}()
+        init_eta[i] = Dict{Pair{A,O},Int64}()
     end
     init_nodes_VQMDP_labels = Vector{Float64}() # node index -> VQMDP label
-    init_obs_kmeans_centroids = Vector{Vector{Float64}}() # node index -> QMDP best action label
+    init_obs_kmeans_centroids = Matrix{Float64}(undef, 0, 0) # each column is a centroid
     init_nodes = Vector{FscNode}()
-    init_dict_trans_func = Dict{Any,Dict{Any,Dict{Any,Float64}}}() # a->s->s'
-    init_dict_obs_func = Dict{Any,Dict{Any,Dict{Any,Float64}}}() # a->s'->o
-    init_dict_process_a_s = Dict{Pair{Any,Any},Bool}() # (a, s) -> bool
     flag_unexpected_obs = -999
     init_prunned_node_list = Vector{Int64}()
-    init_map_discrete2continuous_states = Dict{Vector{Float64}, Vector{Any}}()
 
     return FSC(init_eta,
         init_nodes_VQMDP_labels,
@@ -93,12 +85,9 @@ function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_sp
         max_node_size,
         action_space,
         observation_space,
-        init_dict_trans_func,
-        init_dict_obs_func,
-        init_dict_process_a_s,
         flag_unexpected_obs,
-        init_prunned_node_list,
-        init_map_discrete2continuous_states)
+        init_prunned_node_list
+       )
 
 end
 
@@ -173,54 +162,48 @@ function AddNewAction(n::FscNode, a)
     end
 end
 
-function SearchSimiliarBelief(fsc::FSC, node_list::Vector{Int64}, new_weighted_particles::OrderedDict{Any,Float64}, b_gap_max::Float64)
-
+function SearchSimilarBelief(
+    fsc::FSC,
+    node_list::Vector{Int64},
+    new_weighted_particles::OrderedDict{Int, Float64},
+    b_gap_max::Float64
+)
     min_distance_node_i = -1
     min_distance = typemax(Float64)
 
+    # Pre-extract keys and values for faster access
+    new_keys = collect(keys(new_weighted_particles))
+    new_values = collect(values(new_weighted_particles))
 
-    num_threads = Threads.nthreads()
-    min_distance_node_i_threads = zeros(Int64, num_threads)
-    min_distance_threads = ones(Float64, num_threads) * typemax(Float64)
-
-
-    Threads.@threads for i in 1:length(node_list)
-        node_i = node_list[i]
-        id_thread = Threads.threadid()
-        distance_i = 0.0
+    for node_i in node_list
         weighted_b_node_i = fsc._nodes[node_i]._dict_weighted_samples
-        for (key, value) in new_weighted_particles
-            if haskey(weighted_b_node_i, key)
-                distance_i += abs(value - weighted_b_node_i[key])
-            else
-                distance_i += value
-            end
 
+        distance_i = 0.0
+
+        # Fast loop through belief particles
+        @inbounds for j in eachindex(new_keys)
+            key = new_keys[j]
+            value = new_values[j]
+            distance_i += abs(value - get(weighted_b_node_i, key, 0.0))
             if distance_i > b_gap_max
+                # Early stop: no need to continue
                 break
             end
         end
 
-        if distance_i < min_distance_threads[id_thread]
-            min_distance_threads[id_thread] = distance_i
-            min_distance_node_i_threads[id_thread] = node_i
-        end
-        # end
-    end
-
-    for i in 1:num_threads
-        if min_distance_threads[i] < min_distance
-            min_distance = min_distance_threads[i]
-            min_distance_node_i = min_distance_node_i_threads[i]
+        if distance_i < min_distance
+            min_distance = distance_i
+            min_distance_node_i = node_i
         end
     end
 
     return min_distance, min_distance_node_i
 end
 
+
 function SearchOrInsertBelief(
     fsc::FSC,
-    new_weighted_particles::OrderedDict{Any,Float64},
+    new_weighted_particles::OrderedDict{Int,Float64},
     new_heuristic_value::Float64,
     b_gap_max::Float64;
     Kcandidates::Int = 1000
@@ -235,11 +218,11 @@ function SearchOrInsertBelief(
     sorted_idx = sortperm(diffs)
     candidate_idxs = sorted_idx[1:min(Kcandidates, N)]
 
-    min_distance, min_node_idx = SearchSimiliarBelief(fsc, candidate_idxs, new_weighted_particles, b_gap_max)
+    min_distance, min_node_idx = SearchSimilarBelief(fsc, candidate_idxs, new_weighted_particles, b_gap_max)
 
     # Insert new node if no close match found
     if min_distance > b_gap_max
-        new_node = CreateNode([], new_weighted_particles, fsc._action_space)
+        new_node = CreateNode(new_weighted_particles, fsc._action_space)
         push!(fsc._nodes, new_node)
         push!(fsc._nodes_VQMDP_labels, new_heuristic_value)
         return false, length(fsc._nodes)
@@ -248,29 +231,6 @@ function SearchOrInsertBelief(
     end
 end
 
-
-
-function ComputeDistance(vec_1::Vector{Float64}, vec_2::Vector{Float64})
-    distance = 0.0
-    for i in 1:length(vec_2)
-        distance_temp = abs(vec_2[i] - vec_1[i])
-        distance += distance_temp
-    end
-    return distance
-end
-
-function ComputeDistance(dict_1::Dict{Any, Float64}, dict_2::Dict{Any, Float64})
-    sum = 0.0
-    for (key, value) in dict_1
-        if haskey(dict_2, key)
-            sum += abs(value - dict_2[key])
-        else
-            sum += value
-        end
-    end
-    
-    return sum
-end
 
 function Prunning(fsc::FSC; MIN_VISITS::Int = 50)
     nI = 1
@@ -304,112 +264,103 @@ function Prunning(fsc::FSC; MIN_VISITS::Int = 50)
 end
 
 
-function EvaluateBounds(b0,
-						pomdp, 
-						R_lower_bound, 
-						fsc::FSC, 
-						Q_learning_policy::Qlearning, 
-						discount::Float64, 
-						nb_sim::Int64, 
-						C_star::Int64,
-						epsilon::Float64,
-						vec_evaluation_value::Vector{Float64},
-						vec_upper_bound::Vector{Float64},
-						bool_continuous_observations::Bool,
-						obs_cluster_model::Any)
-    sum_r_U = 0.0
-    sum_r_L = 0.0
+function EvaluateBounds(
+    pomdp::POMDP,
+    fsc::FSC{A, O, ASpace, OSpace},
+    Q_learning_policy::Qlearning{A},
+    discount::Float64,
+    nb_sim::Int,
+    C_star::Int,
+    epsilon::Float64,
+    vec_evaluation_value::Vector{Float64},
+    vec_upper_bound::Vector{Float64}
+) where {POMDP, A, O, ASpace, OSpace}
+
+    obs_cluster_model = fsc._obs_kmeans_centroids
+    bool_continuous_observations = length(obs_cluster_model) > 0
+
+    b0 = initialstate(pomdp)
     R_max = Q_learning_policy._R_max
     R_min = Q_learning_policy._R_min
 
-    num_threads = Threads.nthreads()
-    sum_r_U_threads = zeros(Float64, num_threads)
-    sum_r_L_threads = zeros(Float64, num_threads)
+    sum_r_U::Float64 = 0.0
+    sum_r_L::Float64 = 0.0
 
-    Threads.@threads for sim_i = 1:nb_sim
-        id_thread = Threads.threadid()        
-        step = 0
+    # Preallocate vectors to avoid reallocations
+    o_vec = Vector{Float64}()
+
+    @inbounds for _ in 1:nb_sim
         s = rand(b0)
-        nI = 1
+        nI::Int = 1
+        step::Int = 0
 
-        # while (discount^step)*(R_max - R_min)/( 1 - discount) > epsilon && isterminal(pomdp, s) == false
-        while (discount^step)*(R_max - R_min) > epsilon && isterminal(pomdp, s) == false
-            a = GetBestAction(fsc._nodes[nI])
+        while (discount^step) * (R_max - R_min) > epsilon && !POMDPs.isterminal(pomdp, s)
+            a = GetBestAction(fsc._nodes[nI])::A
             sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a)
-			if bool_continuous_observations
-				o_vec = convert_o(Vector{Float64}, o, pomdp)
-				o_processed = predict_cluster(obs_cluster_model, o_vec)
-				o = o_processed
-			end
 
+            if bool_continuous_observations
+                empty!(o_vec)
+                o_vec = convert_o(Vector{Float64}, o, pomdp)
+                o = predict_cluster(obs_cluster_model, o_vec)::Int
+            end
 
             if haskey(fsc._eta[nI], Pair(a, o)) && fsc._nodes[nI]._visits_node > C_star && nI != -1
                 nI = fsc._eta[nI][Pair(a, o)]
-                sum_r_U_threads[id_thread] += (discount^step) *  r 
-                sum_r_L_threads[id_thread] += (discount^step) *  r 
+                sum_r_U += (discount^step) * r
+                sum_r_L += (discount^step) * r
             else
-                # need check GetValueQMDP function
                 max_Q = fsc._nodes_VQMDP_labels[nI]
-                sum_r_U_threads[id_thread] += (discount^step)*max_Q
-                sum_r_L_threads[id_thread] += (discount^step)*SimulationWithFSC(pomdp,
-                                                                                fsc;
-                                                                                start_state = s,
-                                                                                discount = discount,
-                                                                                epsilon = epsilon,
-                                                                                R_max = R_max,
-                                                                                R_min = R_min,
-                                                                                nI_init = nI,
-                                                                                bool_continuous_observations = bool_continuous_observations,
-                                                                                obs_cluster_model = obs_cluster_model)
+                sum_r_U += (discount^step) * max_Q
+                sum_r_L += (discount^step) * SimulationWithFSC(
+                                                            pomdp,
+                                                            s,
+                                                            fsc;
+                                                            discount = discount,
+                                                            epsilon = epsilon,
+                                                            R_max = R_max,
+                                                            R_min = R_min,
+                                                            nI_init = nI,
+                                                            bool_continuous_observations = bool_continuous_observations,
+                                                            obs_cluster_model = obs_cluster_model
+                                                        )
                 break
             end
 
-			s = sp
-
+            s = sp
             step += 1
         end
-
     end
 
-    for i in 1: num_threads
-        sum_r_U += sum_r_U_threads[i]
-        sum_r_L += sum_r_L_threads[i]
-    end
+    U = sum_r_U / nb_sim
+    L = sum_r_L / nb_sim
 
-	U = sum_r_U / nb_sim
-	L = sum_r_L / nb_sim
+    push!(vec_upper_bound, U)
+    push!(vec_evaluation_value, L)
 
-	push!(vec_upper_bound, U)
-	push!(vec_evaluation_value, L)
-
-    return U, L 
+    return U, L
 end
 
-function SimulationWithFSC(
-    pomdp,
-    fsc::FSC;
-    b0 = nothing,                        
-    start_state = nothing,               
-    max_steps::Int = 100,
-    discount::Float64 = 1.0,
-    epsilon::Float64 = 0.0,
-    R_max::Float64 = 0.0,
-    R_min::Float64 = 0.0,
-    nI_init::Int = 1,
-    bool_continuous_observations::Bool = false,
-    obs_cluster_model::Any = nothing,
-    verbose::Bool = false
-)
+
+function SimulationWithFSC(pomdp::POMDP,
+                            start_state::S,
+                            fsc::FSC{A, O, ASpace, OSpace};           
+                            max_steps::Int = 100,
+                            discount::Float64 = 1.0,
+                            epsilon::Float64 = 0.01,
+                            R_max::Float64 = 0.0,
+                            R_min::Float64 = 0.0,
+                            nI_init::Int = 1,
+                            bool_continuous_observations::Bool = false,
+                            obs_cluster_model::Matrix{Float64} = zeros(Float64, 0, 0),
+                            verbose::Bool = false
+    ) where {POMDP, A, O, S, ASpace, OSpace} 
     # --- Initialize starting state ---
-    s = start_state !== nothing ? start_state : rand(b0)
+    s = start_state
     nI = nI_init
     sum_r = 0.0
     step = 0
 
-    while step ≤ max_steps &&
-          (epsilon <= 0.0 || (discount^step) * (R_max - R_min) > epsilon) &&
-          !isterminal(pomdp, s) &&
-          nI != -1
+    while step ≤ max_steps && (discount^step)*(R_max - R_min) > epsilon && POMDPs.isterminal(pomdp, s) == false && nI != -1
 
         a = GetBestAction(fsc._nodes[nI])
         sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a)
@@ -447,7 +398,7 @@ end
 
 
 
-function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{Any, Float64}, ratio::Float64)
+function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{A, Float64}, ratio::Float64) where {A}
 	max_value = typemin(Float64)
 	for (a, value) in node._Q_action
 		value = 0.0
@@ -467,52 +418,54 @@ function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{Any, Float64}, 
 end
 
 
-function GetValueQMDP(b::OrderedDict{Any, Float64}, 
-                        Q_learning_policy::Qlearning, 
-                        pomdp,
-                        bool_continuous_states::Bool,
-                        map_d2continuous_states::Union{Nothing, Dict{Vector{Float64}, Vector{Any}}},
-                        state_grid::Union{Nothing, Vector{Float64}};
-                        nb_sim::Int = 10)
-    max_value = typemin(Float64)
-    Q_actions = Dict{Any, Float64}() 
+function GetValueQMDP(
+    b::OrderedDict{Int, Float64},
+    Q_learning_policy::Qlearning{A},
+    model::Model
+) where {A}
 
-    for a in Q_learning_policy._action_space
+    discount_factor = POMDPs.discount(model.pomdp)
+    action_space = Q_learning_policy._action_space
+
+    Q_actions = Dict{A, Float64}(a => 0.0 for a in action_space)
+    max_value = -Inf
+
+    for a in action_space
         temp_value = 0.0
+        total_weight = 0.0
+
+        # For each belief particle (state s)
         for (s, pb) in b
-            for _ in 1:nb_sim
+            # Step_batch returns multiple (sp, o, r) samples
+            vector_steps = Step_batch(model, s, a)
 
-                if bool_continuous_states
-                    sp, o, r = Step(pomdp, 
-                    s, 
-                    a, 
-                    bool_continuous_states, 
-                    map_d2continuous_states,
-                    state_grid)
-                else
-                    sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a)
-                end
-
-                temp_value += pb*(r + discount(pomdp)*GetV(Q_learning_policy, sp))
+            @inbounds for (sp, _, r) in vector_steps
+                temp_value += pb * (r + discount_factor * GetV(Q_learning_policy, sp))
+                total_weight += pb
             end
         end
-        temp_value /= nb_sim
+
+        if total_weight > 0
+            temp_value /= total_weight
+        end
+
         Q_actions[a] = temp_value
         if temp_value > max_value
             max_value = temp_value
         end
     end
 
-    return max_value, Q_learning_policy._action_space, Q_actions
+    return max_value, action_space, Q_actions
 end
 
-function transition(fsc::FSC, nI::Int, a::Any, o::Any)
+
+function transition(fsc::FSC, nI::Int, a::A, o::O) where {A, O}
     # Terminal node or invalid index
     if nI == -1
         return -1
     end
 
-    node_transitions = fsc._eta[nI]  # Dict{Pair{Any,Int}, Int}
+    node_transitions = fsc._eta[nI]  # Dict{Pair{A,O}, Int}
     a_o_pair = Pair(a, o)
 
     # 1. Exact match for (a, o)
