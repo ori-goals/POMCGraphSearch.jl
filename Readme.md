@@ -78,7 +78,7 @@ Solve(pomcgs)
 
 ---
 
-### Example — LightDark (cintinuous POMDP)
+### Example — LightDark (Continuous POMDP)
 
 ```julia
 using POMCGraphSearch 
