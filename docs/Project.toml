@@ -1,0 +1,5 @@
+name = "POMCGraphSearchDocs"
+
+[deps]
+Documenter = "e30172f5-f512-5bca-890b-2f4f85c38a5f"
+POMCGraphSearch = "e82fe6b4-19c7-48e5-8e59-9f77de09f3d8" 

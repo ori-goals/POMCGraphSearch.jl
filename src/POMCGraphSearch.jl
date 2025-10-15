@@ -10,6 +10,7 @@ using Printf
 using DataFrames, CSV
 using LinearAlgebra
 using StatsBase
+using POMDPTools: discounted_reward, eachstep, HistoryRecorder
 
 include("ModelWrapper.jl")
 include("Qlearning.jl")
@@ -18,9 +19,9 @@ include("FSC.jl")
 include("Planner.jl")
 
 
-export SolverPOMCGS, Solve, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, ExportLogData
+export SolverPOMCGS, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, ExportLogData, run_standard_simulation, run_batch_simulations
 
-mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
+mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <: Solver
     # --- Parameters for the problem model ---
     pomdp::POMDP
     model::Model{POMDP, S, A, O_discrete}
@@ -42,7 +43,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
     # --- Parameters for the VMDP heuristic ---
     VMDP_heuristic::Qlearning{A}
 	nb_episode_size::Int
-	nb_max_episode::Int
+	VMDP_nb_max_episode::Int
     nb_samples_VMDP::Int
 	nb_sim_VMDP::Int
     epsilon_VMDP::Float64
@@ -59,7 +60,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
     alpha_a::Float64
     bool_APW::Bool
     max_search_depth::Int64
-    max_planning_secs::Int64
+    max_planning_secs::Float64
     nb_sim_per_iter::Int64
     nb_eval::Int64
     Log_result::LogResult
@@ -70,7 +71,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
 
     function SolverPOMCGS(pomdp::POMDP;
                     # --- Problem model defaults ---
-                    num_sim_per_sa::Int64 = 10, # default 10
+                    num_sim_per_sa::Int64 = 100, # default 100
 					state_grid::Vector{Float64} = Vector{Float64}(),
                     num_init_APW_actions::Int = 10, # default number of init fixed actions for continuous action spaces
                     num_action_APW_threshold::Int = 30, # if the action space is larger then this value, use APW
@@ -80,10 +81,10 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
                     # --- VMDP heuristic defaults ---
                     # VMDP_heuristic::Any = nothing,
 					nb_episode_size::Int = 30,
-					nb_max_episode::Int = 20,
+					VMDP_nb_max_episode::Int = 20,
                     nb_samples_VMDP::Int = 5000,
 					nb_sim_VMDP::Int = 10,
-                    epsilon_VMDP::Float64 = 0.01,
+                    epsilon_VMDP::Float64 = 0.1,
                     ratio_heuristic_Q::Float64 = 0.0, # ratio of heuristic Q value in FSC node initialization, if 0, no heuristic Q value (pessimistic), if 1, full heuristic Q value (optimistic)
                     # --- Planner defaults ---
                     max_b_gap::Float64 = 0.3,
@@ -98,7 +99,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
                     bool_APW::Bool = false,
                     # Search Parameters
                     max_search_depth::Int64 = 40,
-                    max_planning_secs::Int64 = 100_000,
+                    max_planning_secs::Float64 = 10000.0,
 					nb_sim_per_iter::Int64 = 1000,
                     nb_eval::Int64 = 100_00
                     ) where {POMDP}
@@ -179,10 +180,10 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
         println("--- Initializing VMDP heuristic ---")
         # Print details of VMDP initialization parameters
         println("VMDP heuristic: Q-learning")
-        println("Number of max episodes: ", nb_max_episode)
+        println("Number of max episodes: ", VMDP_nb_max_episode)
 
 		# if state is discrete
-        TrainingEpisodes(Vmdp, nb_episode_size, nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, model)
+        TrainingEpisodes(Vmdp, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, model)
 
 		VMDP_heuristic = Vmdp
         # Log result
@@ -236,7 +237,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
                           state_space_type,
                           observation_space_type, observation_space, num_fixed_observations, obs_cluster_model,
                           num_sim_per_sa, state_grid,
-                          VMDP_heuristic, nb_episode_size, nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, ratio_heuristic_Q,
+                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, ratio_heuristic_Q,
                           max_b_gap, max_graph_node_size, nb_iter,
                           POMDPs.discount(pomdp), epsilon, C_star, kmeans_itr, k_a, alpha_a, bool_APW,      
                           max_search_depth, max_planning_secs, nb_sim_per_iter, nb_eval, log_result, fsc, planner)
@@ -417,7 +418,11 @@ function SaveFSCPolicyJSON(fsc::FSC; outfile_name::Union{Nothing, String}=nothin
     return filename
 end
 
-
+function POMDPs.solve(solver::SolverPOMCGS, pomdp::POMDP)
+    Solve(solver) 
+    
+    return solver.fsc   
+end
 
 
 end

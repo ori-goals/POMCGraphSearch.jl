@@ -6,7 +6,7 @@ mutable struct Planner
 	_epsilon::Float64                            
 	_C_star::Int64								 
 	_max_search_depth::Int64					
-	_max_planning_secs::Int64                   
+	_max_planning_secs::Float64                   
 	_nb_sim::Int64								 
 	_nb_eval::Int64                              
 	_Q_learning_policy::Qlearning
@@ -93,7 +93,7 @@ function Simulate(model::Model,
 	end
 
 
-	if (discount^depth) * (Q_learning_policy._R_max - Q_learning_policy._R_min) < epsilon || isterminal(model, s) || nI == -1
+	if (discount^depth) * (Q_learning_policy._R_max - Q_learning_policy._R_min) < epsilon || isterminal(model, s)
 		return 0
 	end
 
@@ -118,15 +118,8 @@ function Simulate(model::Model,
 											ratio_heuristic_Q)
 	end
 
-	nI_next = -1
 	sp, o, r = Step(model, s, a)
-
-	if haskey(fsc._eta[nI], Pair(a, o))
-		nI_next = fsc._eta[nI][Pair(a, o)]
-	else
-		nI_next = transition(fsc, nI, a, o)
-		fsc._eta[nI][Pair(a, fsc._flag_unexpected_obs)] = nI_next
-	end
+	nI_next = fsc._eta[nI][Pair(a, o)]
 
 
 	esti_V = fsc._nodes[nI]._R_action[a] + discount * Simulate(model, 

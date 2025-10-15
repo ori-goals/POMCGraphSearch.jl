@@ -1,93 +1,35 @@
+# test/runtests.jl
+
 using POMCGraphSearch
 using Test
-using POMDPs
-using Random
-using POMDPTools
 
-@testset "POMCGS Basic Tests" begin
+using POMCGraphSearch
+using Test
 
-    @testset "Package Loading" begin
-        @test isdefined(Main, :POMCGraphSearch)
-        println("✓ Package loaded successfully")
-    end
+# Detect environment
+is_ci = get(ENV, "CI", "false") == "true"
+run_full_tests = !is_ci && get(ENV, "POMCGS_FULL_TEST", "false") == "true"
 
-    @testset "Type Definitions" begin
-        @test isdefined(POMCGraphSearch, :SolverPOMCGS)
-        println("✓ SolverPOMCGS type defined")
-    end
+println("POMCGraphSearch Test Suite")
+println("===========================")
+println("CI Environment: $is_ci")
+println("Full Tests: $run_full_tests")
 
-    @testset "Key Functions Exist" begin
-        for fname in [:Solve, :detect_action_space, :detect_state_space, :detect_observation_space]
-            @test isdefined(POMCGraphSearch, fname)
-        end
-        println("✓ Key functions defined")
-    end
+# Essential tests - always run
+println("\n1. Running essential tests...")
+include("basic_structure_tests.jl")
 
+# Heavy integration tests - conditional
+if run_full_tests
+    println("\n2. Running RockSample integration...")
+    include("test_rocksample.jl")
+    
+    println("\n3. Running LightDark integration...")
+    include("test_lightdark.jl")
+else
+    println("\n2. Skipping heavy integration tests")
+    println("   Set POMCGS_FULL_TEST=true to enable full test suite, e.g., in Julia REPL run: ENV[\"POMCGS_FULL_TEST\"] = \"true\"")
+    @test_skip "Heavy tests disabled"
 end
 
-
-# ------------------------------------------------------------------------------
-# Integration Tests
-# ------------------------------------------------------------------------------
-
-@testset "POMCGS Integration Test" begin
-
-    # Define a minimal test POMDP
-    struct MiniPOMDP <: POMDP{Bool, Bool, Bool} end
-
-    POMDPs.actions(::MiniPOMDP) = [true, false]
-    POMDPs.states(::MiniPOMDP) = [true, false]
-    POMDPs.observations(::MiniPOMDP) = [true, false]
-    POMDPs.reward(::MiniPOMDP, s, a) = s ? 1.0 : -1.0
-    POMDPs.initialstate(::MiniPOMDP) = Deterministic(true)
-    POMDPs.discount(::MiniPOMDP) = 0.95
-    POMDPs.isterminal(::MiniPOMDP, s) = false
-
-
-    POMDPs.transition(::MiniPOMDP, s, a) = Deterministic(!s)
-    POMDPs.observation(::MiniPOMDP, sp, a) = Deterministic(sp)
-    POMDPs.reward(::MiniPOMDP, s, a) = s ? 1.0 : -1.0
-
-    function POMDPs.gen(::MiniPOMDP, s, a)
-        sp = !s
-        o = sp
-        r = s ? 1.0 : -1.0
-        return (sp=sp, o=o, r=r)
-    end
-
-    @testset "MiniPOMDP Creation" begin
-        pomdp = MiniPOMDP()
-        @test pomdp isa MiniPOMDP
-        @test length(POMDPs.actions(pomdp)) == 2
-        @test POMDPs.discount(pomdp) ≈ 0.95
-        println("✓ MiniPOMDP created")
-    end
-
-    @testset "POMCGS Constructor" begin
-        pomdp = MiniPOMDP()
-
-        try
-            solver = POMCGS.SolverPOMCGS(
-                pomdp;
-                nb_iter=10,
-                nb_sim=5,
-                max_planning_secs=1,
-                nb_eval=10,
-                nb_samples_VMDP=5,
-                min_num_particles=10,
-                max_num_particles=50,
-                max_graph_node_size=100
-            )
-
-            @test solver isa POMCGS.SolverPOMCGS
-            @test solver.pomdp === pomdp
-            println("✓ SolverPOMCGS constructor works")
-
-        catch e
-            @warn "POMCGS constructor failed (may need additional dependencies): $e"
-        end
-    end
-
-end
-
-println("✓ All basic structure and integration tests passed!")
+println("\n✓ Test suite completed!")

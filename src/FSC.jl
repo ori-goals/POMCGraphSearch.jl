@@ -11,18 +11,106 @@ mutable struct FscNode{A}
 end
 
 
-mutable struct FSC{A, O, ASpace, OSpace}
+mutable struct FSC{A, O, ASpace, OSpace} <: Policy
     _eta::Vector{Dict{Pair{A,O},Int64}}
-    _nodes_VQMDP_labels::Vector{Float64} # node index -> VQMDP label
-    _obs_kmeans_centroids::Matrix{Float64} # each column is a centroid
+    _nodes_VQMDP_labels::Vector{Float64}
+    _obs_kmeans_centroids::Matrix{Float64}
     _nodes::Vector{FscNode}
     _max_accept_belief_gap::Float64
     _max_node_size::Int64
     _action_space::ASpace
     _observation_space::OSpace
-    _flag_unexpected_obs::Int64
     _prunned_node_list::Vector{Int64}
 end
+
+# Belief updater for FSC - tracks current node as belief
+struct FSCBeliefUpdater{A, O, ASpace, OSpace, P} <: Updater
+    fsc::FSC{A, O, ASpace, OSpace}
+    pomdp::P  # Store POMDP for observation conversion if needed
+end
+
+
+# Get action from FSC node
+function POMDPs.action(fsc::FSC, node_id::Int)
+    # return GetBestAction(fsc._nodes[node_id])
+    return fsc._nodes[node_id]._best_action
+end
+
+# Get updater for this policy
+function POMDPs.updater(fsc::FSC, pomdp::POMDP)
+    return FSCBeliefUpdater(fsc, pomdp)
+end
+
+# Update belief (node) based on action and observation
+function POMDPs.update(updater::FSCBeliefUpdater, current_node::Int, a::A, observation::O) where {A, O}
+    # Warn if action is not the node's best action
+    # if action != updater.fsc._nodes[current_node]._best_action
+    #     @warn "Action $action is not the best action for node $current_node"
+    # end
+    
+    # Handle different observation types
+    if updater.fsc._obs_kmeans_centroids != zeros(Float64, 0, 0)
+        # Continuous observation: convert to discrete using clustering
+        return transition_continuous(updater.fsc, current_node, a, observation, updater.pomdp)
+    else
+        # Discrete observation: use directly
+        return transition(updater.fsc, current_node, a, observation)
+    end
+end
+
+# Initialize belief to starting node
+function POMDPs.initialize_belief(updater::FSCBeliefUpdater, initial_state_distribution::Any)
+    return 1  # Start from node 1
+end
+
+function run_standard_simulation(pomdp::POMDP, fsc::FSC; 
+                                max_steps::Int=100, 
+                                verbose::Bool=false,
+                                initial_node::Int=1)
+    
+    history = simulate(HistoryRecorder(max_steps=max_steps), 
+                      pomdp, fsc, updater(fsc, pomdp), initial_node)
+    
+    if verbose
+        println("Simulation finished after $(length(history)) steps.")
+        println("Total discounted reward: $(discounted_reward(history))")
+        
+        for (i, (s, a, r, sp, o, b)) in enumerate(eachstep(history, "s,a,r,sp,o,b"))
+            println("Step $i: Node $b, State $s, Action $a, Reward $r, Obs $o")
+        end
+    end
+    
+    return history
+end
+
+function run_batch_simulations(pomdp::POMDP, fsc::FSC;
+                             n_simulations::Int=1000,
+                             max_steps::Int=100,
+                             initial_node::Int=1,
+                             verbose::Bool=false)
+    
+    rewards = Float64[]
+    
+    for i in 1:n_simulations
+        history = run_standard_simulation(pomdp, fsc, 
+                                        max_steps=max_steps,
+                                        initial_node=initial_node,
+                                        verbose=false)
+        reward = discounted_reward(history)
+        push!(rewards, reward)
+        
+        if verbose && i % 100 == 0
+            println("Completed $i/$n_simulations simulations")
+        end
+    end
+    
+    println("Batch Evaluation Results:")
+    println("Mean reward: $(mean(rewards))")
+    println("Std dev: $(std(rewards))")
+    
+    return mean(rewards), std(rewards)
+end
+# ------------------ FSC methods ------------------
 
 function InitFscNode(action_space::ASpace) where {ASpace}
     A = eltype(action_space)
@@ -74,7 +162,6 @@ function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_sp
     init_nodes_VQMDP_labels = Vector{Float64}() # node index -> VQMDP label
     init_obs_kmeans_centroids = Matrix{Float64}(undef, 0, 0) # each column is a centroid
     init_nodes = Vector{FscNode}()
-    flag_unexpected_obs = -999
     init_prunned_node_list = Vector{Int64}()
 
     return FSC(init_eta,
@@ -85,7 +172,6 @@ function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_sp
         max_node_size,
         action_space,
         observation_space,
-        flag_unexpected_obs,
         init_prunned_node_list
        )
 
@@ -93,14 +179,17 @@ end
 
 function GetBestAction(n::FscNode)
     Q_max = typemin(Float64)
-    best_a = rand(keys(n._Q_action))
-    for (key, value) in n._Q_action
-        if value > Q_max && n._visits_action[key] != 0
-            Q_max = value
-            best_a = key
+    best_a = first(keys(n._Q_action))
+    visits = n._visits_action
+    q_actions = n._Q_action
+    
+    @inbounds for (a, q_value) in q_actions
+        if visits[a] > 0 && q_value > Q_max
+            Q_max = q_value
+            best_a = a
         end
     end
-
+    
     n._best_action = best_a
     return best_a
 end
@@ -152,7 +241,7 @@ function ActionProgressiveWidening(fsc::FSC, nI::Int, action_space, K_a::Float64
     end
 end
 
-function AddNewAction(n::FscNode, a)
+function AddNewAction(n::FscNode, a::A) where {A}
     if !haskey(n._visits_action, a)
         push!(n._actions, a)
         n._abstract_observations[a] = Vector{Vector{Float64}}()
@@ -242,7 +331,7 @@ function Prunning(fsc::FSC; MIN_VISITS::Int = 50)
         if  fsc._nodes[nI]._visits_node >= MIN_VISITS
             # Reliable best action: follow policy pruning
             a_best = GetBestAction(fsc._nodes[nI])
-            for (k, v) in fsc._eta[nI]
+                for (k, v) in fsc._eta[nI]
                 if k[1] == a_best && !(v in result_list)
                     push!(open_list, v)
                     push!(result_list, v)
@@ -304,7 +393,7 @@ function EvaluateBounds(
                 o = predict_cluster(obs_cluster_model, o_vec)::Int
             end
 
-            if haskey(fsc._eta[nI], Pair(a, o)) && fsc._nodes[nI]._visits_node > C_star && nI != -1
+            if haskey(fsc._eta[nI], Pair(a, o)) && fsc._nodes[nI]._visits_node > C_star
                 nI = fsc._eta[nI][Pair(a, o)]
                 sum_r_U += (discount^step) * r
                 sum_r_L += (discount^step) * r
@@ -360,9 +449,9 @@ function SimulationWithFSC(pomdp::POMDP,
     sum_r = 0.0
     step = 0
 
-    while step ≤ max_steps && (discount^step)*(R_max - R_min) > epsilon && POMDPs.isterminal(pomdp, s) == false && nI != -1
+    while step ≤ max_steps && (discount^step)*(R_max - R_min) > epsilon && POMDPs.isterminal(pomdp, s) == false
 
-        a = GetBestAction(fsc._nodes[nI])
+        a = GetBestAction(fsc._nodes[nI])::A
         sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a)
 
         if bool_continuous_observations
@@ -443,7 +532,8 @@ function GetValueQMDP(
         @inbounds for i in 1:n_states
             s = states[i]
             pb = beliefs[i]
-            # Get transition distribution (Dict format)
+
+            # Get transition distribution 
             transitions = Step_batch(model, s, a)
 
             # Iterate over all possible transitions with probabilities
@@ -470,11 +560,6 @@ end
 
 
 function transition(fsc::FSC, nI::Int, a::A, o::O) where {A, O}
-    # Terminal node or invalid index
-    if nI == -1
-        return -1
-    end
-
     node_transitions = fsc._eta[nI]  # Dict{Pair{A,O}, Int}
     a_o_pair = Pair(a, o)
 
@@ -486,8 +571,18 @@ function transition(fsc::FSC, nI::Int, a::A, o::O) where {A, O}
         candidates = [next_node for (pair, next_node) in node_transitions if pair.first == a]
 
         if isempty(candidates)
-            return -1
+            # println("Warning: No transitions found for action $a from node $nI with observation $o.")
+            return 1  # No transition for this action, go to root node
         end
         throw(ArgumentError("Invalid transition with node $nI, action $a, and observation $o."))        
     end
+end
+
+function transition_continuous(fsc::FSC, nI::Int, a::A, o::O_Continuous, pomdp::POMDP) where {A, O_Continuous, POMDP}
+    # Convert continuous observation to discrete cluster
+    observation_vec = convert_o(Vector{Float64}, o, pomdp)
+    obs_discrete = predict_cluster(fsc._obs_kmeans_centroids, observation_vec)::Int
+    
+    # Use discrete transition
+    return transition(fsc, nI, a, obs_discrete)
 end
