@@ -430,12 +430,19 @@ function GetValueQMDP(
     Q_actions = Dict{A, Float64}(a => 0.0 for a in action_space)
     max_value = -Inf
 
+
+    states = collect(keys(b))
+    beliefs = collect(values(b))
+    n_states = length(states)
+
     for a in action_space
         temp_value = 0.0
         total_weight = 0.0
 
         # For each belief particle (state s)
-        for (s, pb) in b
+        @inbounds for i in 1:n_states
+            s = states[i]
+            pb = beliefs[i]
             # Get transition distribution (Dict format)
             transitions = Step_batch(model, s, a)
 

@@ -84,7 +84,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
                     nb_samples_VMDP::Int = 5000,
 					nb_sim_VMDP::Int = 10,
                     epsilon_VMDP::Float64 = 0.01,
-                    ratio_heuristic_Q::Float64 = 0.3, # ratio of heuristic Q value in FSC node initialization, if 0, no heuristic Q value (pessimistic), if 1, full heuristic Q value (optimistic)
+                    ratio_heuristic_Q::Float64 = 0.0, # ratio of heuristic Q value in FSC node initialization, if 0, no heuristic Q value (pessimistic), if 1, full heuristic Q value (optimistic)
                     # --- Planner defaults ---
                     max_b_gap::Float64 = 0.3,
                     max_graph_node_size::Int64 = 10_000_000,
@@ -114,6 +114,14 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete}
         O = obstype(pomdp)
         O_discrete = observation_space_type == :discrete ? O : Int
 
+        # if user not specify a ratio_heuristic_Q value (0.0), then automatically init it 
+        if ratio_heuristic_Q == 0.0
+            if observation_space_type == :discrete 
+                ratio_heuristic_Q = 0.01
+            else 
+                ratio_heuristic_Q = 0.8
+            end
+        end
 
         # if continuous observations, discretize the observation space
         obs_cluster_model = zeros(Float64, 0, 0)
