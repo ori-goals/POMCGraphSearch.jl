@@ -62,7 +62,7 @@ run_standard_simulation(pomdp, fsc; verbose=true)  # Simulate the resulting FSC
 
 ```julia
 using POMCGraphSearch 
-
+using POMDPs
 using POMDPModels
 
 pomdp = LightDark1D()  # define the LightDark problem
