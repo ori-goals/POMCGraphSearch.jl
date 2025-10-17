@@ -74,8 +74,12 @@ function ProcessState(s_vec::Vector{Float64}, state_grid::Vector{Float64})
     return result
 end
 
-function detect_action_space(pomdp::POMDP, num_action_APW_threshold::Int, num_init_APW_actions::Int) where {POMDP}
-    if hasmethod(POMDPs.actions, Tuple{typeof(pomdp)})
+function detect_action_space(pomdp::POMDP, num_action_APW_threshold::Int, num_init_APW_actions::Int, bool_APW::Bool) where {POMDP}
+    try
+        if !hasmethod(POMDPs.actions, Tuple{typeof(pomdp)})
+            throw(ArgumentError("The POMDP does not have a defined action space."))
+        end
+        
         acts = POMDPs.actions(pomdp)
         ASpace = typeof(acts)
 
@@ -83,51 +87,100 @@ function detect_action_space(pomdp::POMDP, num_action_APW_threshold::Int, num_in
         if hasmethod(length, Tuple{typeof(acts)})
             num_actions = length(acts)
             if num_actions > num_action_APW_threshold
-                println("Action number ($num_actions) is large, applying action progressive widening (APW")
+                println("Action number ($num_actions) is large, applying action progressive widening (APW)")
                 bool_APW = true
                 action_space = [rand(acts) for _ in 1:num_init_APW_actions]
                 return :continuous_sampleable, ASpace, action_space
             end
-            return :discrete, ASpace, acts
+            return :discrete, ASpace, acts, false
         end
 
         # Otherwise, check if rand is defined on actions
         if hasmethod(rand, Tuple{typeof(acts)})
-            action_space = [rand(acts) for _ in 1:num_fixed_actions]
+            action_space = [rand(acts) for _ in 1:num_init_APW_actions]
             return :continuous_sampleable, ASpace, action_space
         else
             throw(ArgumentError("The POMDP does not have rand function defined for action sampling."))        
         end
-    else
-        throw(ArgumentError("The POMDP does not have a defined action space."))
+        
+    catch e
+        # Handle specific error cases
+        error_msg = string(e)
+        if occursin("action", lowercase(error_msg)) || occursin("actions", lowercase(error_msg))
+            @warn "POMDP action space detection issue: $error_msg"
+            # Try to fallback to a default action space if possible
+            if hasmethod(POMDPs.actions, Tuple{POMDP})
+                # Try the type instead of instance
+                acts = POMDPs.actions(POMDP)
+                return :discrete, typeof(acts), acts, false
+            else
+                rethrow(e)
+            end
+        else
+            rethrow(e)
+        end
     end
 end
 
 function detect_state_space(pomdp::POMDP) where {POMDP}
-    if hasmethod(POMDPs.states, Tuple{typeof(pomdp)})
+    try
+        if !hasmethod(POMDPs.states, Tuple{typeof(pomdp)})
+            return :continuous, Nothing, nothing
+        end
+        
         sts = POMDPs.states(pomdp)
         SSpace = typeof(sts)
-        if hasmethod(length, Tuple{typeof(sts)})
+        
+        if hasmethod(length, Tuple{typeof(sts)}) && isfinite(length(sts))
             return :discrete, SSpace, sts
         else
             return :continuous, SSpace, sts
         end
-    else
-        return :continuous, nothing, nothing
+        
+    catch e
+        # Handle state space detection errors
+        error_msg = string(e)
+        if occursin("state", lowercase(error_msg)) || occursin("states", lowercase(error_msg)) ||
+           occursin("continuous", lowercase(error_msg)) || occursin("discrete", lowercase(error_msg))
+            
+            @warn "POMDP state space detected via error message: $error_msg"
+            
+            if occursin("continuous", lowercase(error_msg))
+                return :continuous, Nothing, nothing
+            else
+                # Default to continuous for safety
+                return :continuous, Nothing, nothing
+            end
+        else
+            @warn "Unexpected error detecting state space: $e. Assuming continuous."
+            return :continuous, Nothing, nothing
+        end
     end
 end
 
 function detect_observation_space(pomdp::POMDP) where {POMDP}
-    if hasmethod(POMDPs.observations, Tuple{typeof(pomdp)})
-        obss = POMDPs.observations(pomdp)
-        OSpace = typeof(obss)
-        if hasmethod(length, Tuple{typeof(obss)})
-            return :discrete, OSpace, obss
+    try
+        if hasmethod(POMDPs.observations, Tuple{typeof(pomdp)})
+            obss = POMDPs.observations(pomdp)
+            OSpace = typeof(obss)
+            if hasmethod(length, Tuple{typeof(obss)})
+                return :discrete, OSpace, obss
+            else
+                return :continuous, Vector{Int}, Vector{Int}() # Use Int as placeholder for continuous obs
+            end
         else
-            return :continuous, Vector{Int}, Vector{Int}() # for continuous obs, we return Vector{Int} as a placeholder
+            return :continuous, Vector{Int}, Vector{Int}()
         end
-    else
-        return :continuous, Vector{Int}, Vector{Int}() # for continuous obs, we return Vector{Int} as a placeholder
+    catch e
+        # If observations() method exists but throws an error (like LidarPOMDP),
+        # assume it's continuous observation space
+        if occursin("continuous", string(e)) || occursin("Continuous", string(e))
+            @warn "POMDP indicates continuous observations via error: $e"
+            return :continuous, Vector{Int}, Vector{Int}()
+        else
+            # Re-throw unexpected errors
+            rethrow(e)
+        end
     end
 end
 
