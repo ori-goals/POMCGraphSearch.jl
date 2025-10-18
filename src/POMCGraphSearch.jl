@@ -106,7 +106,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
 
 
         # Detect spaces
-        action_space_type, ASpace, action_space = detect_action_space(pomdp, num_action_APW_threshold, num_init_APW_actions)
+        action_space_type, ASpace, action_space = detect_action_space(pomdp, num_action_APW_threshold, num_init_APW_actions, bool_APW)
         state_space_type, SSpace, state_space = detect_state_space(pomdp)
         observation_space_type, OSpace_discrete, observation_space = detect_observation_space(pomdp)
 
