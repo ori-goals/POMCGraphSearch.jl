@@ -97,17 +97,19 @@ SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 
 ### Core POMCGS Planning Parameters
 
+The POMCGS solver automatically detects the input POMDP type, i.e., whether the state, observation, or action spaces are continuous or discrete.
+Users can further tune the behavior of the solver through the following core parameters:
 | Parameter                   | Default  | Description                                                                                  |
 |------------------------------|----------|----------------------------------------------------------------------------------------------|
 | `max_b_gap`                  | `0.1`    | Belief merging threshold; controls granularity of the belief graph. *(0.1 = tight, larger = faster planning but coarser graph)* |
-| `max_search_depth`           | `50`     | Maximum search depth for tree search.                                                       |
+| `max_search_depth`           | `50`     | Maximum search depth.                                                                       |
 | `num_sim_per_sa`             | `100`    | Number of simulations per action.                                                           |
 | `epsilon`                    | `0.1`    | Convergence threshold: stop when upper–lower bound gap < `epsilon`.                         |
-| `nb_particles`               | `10000`  | Number of particles sampled from the initial belief `b₀`.                                   |
+| `nb_particles`               | `10000`  | Number of particles sampled from the initial belief `b0`.                                   |
 | `state_grid`                 | `[]`     | Grid for discretizing continuous states (used only for continuous-state POMDPs).            |
 | `num_fixed_observations`     | `20`     | Number of observation clusters (used only for continuous-observation POMDPs).               |
-| `k_a`                        | `2.0`    | Action Progressive Widening constant; controls the number of actions explored per node (only for large or continuous action spaces). |
-| `alpha_a`                    | `0.2`    | Action Progressive Widening exponent; controls how fast new actions are added with visits (only for large or continuous action spaces). |
+| `k_a`                        | `2.0`    | Action Progressive Widening constant (used only for POMDPs with large or continuous action spaces). |
+| `alpha_a`                    | `0.2`    | Action Progressive Widening exponent (used only for POMDPs with large or continuous action spaces). |
 
 
 
