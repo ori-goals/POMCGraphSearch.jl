@@ -92,6 +92,14 @@ or
 ```Julia
 SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 ```
+---
+
+### Settings for Common Benchmarks
+
+We provide detailed configuration examples for several common POMDP benchmarks — including **RockSample(7,8)**, **RockSample(11,11)**, **RockSample(15,15)**, **LightDark**, **Bumper Roomba**, and **Lidar Roomba** — in the file [**`/docs/example_common_benchmarks.md`**](./docs/example_common_benchmarks.md).
+
+These examples reproduce the experiments reported in the POMCGS paper and serve as good starting points for tuning parameters in other domains.
+
 
 ---
 
@@ -107,6 +115,7 @@ Users can further tune the behavior of the solver through the following core par
 | `epsilon`                    | `0.1`    | Convergence threshold: stop when upper–lower bound gap < `epsilon`.                         |
 | `nb_particles`               | `10000`  | Number of particles sampled from the initial belief `b0`.                                   |
 |`C_star`|`100`|Node visit threshold controlling when a belief node is considered sufficiently explored. Larger values yield tighter bounds but slower convergence, while smaller values favor faster but more approximate updates.|
+|`max_planning_secs`|`10000`| The planning time out (in seconds)|
 | `state_grid`                 | `[]`     | Grid for discretizing continuous states (used only for continuous-state POMDPs).            |
 | `num_fixed_observations`     | `20`     | Number of observation clusters (used only for continuous-observation POMDPs).               |
 | `k_a`                        | `2.0`    | Action Progressive Widening constant (used only for POMDPs with large or continuous action spaces). |
