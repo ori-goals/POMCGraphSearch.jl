@@ -59,7 +59,7 @@ if lightdark_available
             @test action_val in actions(pomdp)
             
             # Test updater interface
-            updater = @test_nowarn POMDPs.updater(policy, pomdp)
+            updater = @test_nowarn POMDPs.updater(policy)
             @test updater isa POMDPs.Updater
             
             # Test belief initialization
@@ -67,7 +67,7 @@ if lightdark_available
             @test belief == 1  # Should start from node 1
 
             # Test simulation interface
-            updater_instance = POMDPs.updater(policy, pomdp)
+            updater_instance = POMDPs.updater(policy)
             
             # Test basic simulation
             history = @test_nowarn simulate(
@@ -93,7 +93,7 @@ if lightdark_available
             end
             
             # Test belief update with mock observation
-            updater = POMDPs.updater(policy, pomdp)
+            updater = POMDPs.updater(policy)
             current_node = 1
             action = POMDPs.action(policy, current_node)
             test_observation = 0.5  # Example observation for LightDark

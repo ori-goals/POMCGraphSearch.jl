@@ -150,7 +150,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         end
 
         # Initialize FSC
-		fsc = InitFSC(max_b_gap, max_graph_node_size, action_space, observation_space)
+		fsc = InitFSC(max_b_gap, max_graph_node_size, action_space, observation_space, pomdp)
         fsc._obs_kmeans_centroids = obs_cluster_model
 
 

@@ -11,7 +11,8 @@ mutable struct FscNode{A}
 end
 
 
-mutable struct FSC{A, O, ASpace, OSpace} <: Policy
+mutable struct FSC{A, O, ASpace, OSpace, POMDP} <: Policy
+    _pomdp::POMDP
     _eta::Vector{Dict{Pair{A,O},Int64}}
     _nodes_VQMDP_labels::Vector{Float64}
     _obs_kmeans_centroids::Matrix{Float64}
@@ -24,9 +25,8 @@ mutable struct FSC{A, O, ASpace, OSpace} <: Policy
 end
 
 # Belief updater for FSC - tracks current node as belief
-struct FSCBeliefUpdater{A, O, ASpace, OSpace, P} <: Updater
-    fsc::FSC{A, O, ASpace, OSpace}
-    pomdp::P  # Store POMDP for observation conversion if needed
+struct FSCBeliefUpdater{A, O, ASpace, OSpace, POMDP} <: Updater
+    fsc::FSC{A, O, ASpace, OSpace, POMDP}
 end
 
 
@@ -37,8 +37,8 @@ function POMDPs.action(fsc::FSC, node_id::Int)
 end
 
 # Get updater for this policy
-function POMDPs.updater(fsc::FSC, pomdp::POMDP)
-    return FSCBeliefUpdater(fsc, pomdp)
+function POMDPs.updater(fsc::FSC)
+    return FSCBeliefUpdater(fsc)
 end
 
 # Update belief (node) based on action and observation
@@ -51,7 +51,7 @@ function POMDPs.update(updater::FSCBeliefUpdater, current_node::Int, a::A, obser
     # Handle different observation types
     if updater.fsc._obs_kmeans_centroids != zeros(Float64, 0, 0)
         # Continuous observation: convert to discrete using clustering
-        return transition_continuous(updater.fsc, current_node, a, observation, updater.pomdp)
+        return transition_continuous(updater.fsc, current_node, a, observation, updater.fsc._pomdp)
     else
         # Discrete observation: use directly
         return transition(updater.fsc, current_node, a, observation)
@@ -69,7 +69,7 @@ function run_standard_simulation(pomdp::POMDP, fsc::FSC;
                                 initial_node::Int=1)
     
     history = simulate(HistoryRecorder(max_steps=max_steps), 
-                      pomdp, fsc, updater(fsc, pomdp), initial_node)
+                      pomdp, fsc, updater(fsc), initial_node)
     
     if verbose
         println("Simulation finished after $(length(history)) steps.")
@@ -152,7 +152,7 @@ function CreateNode(weighted_b::OrderedDict{Int, Float64}, action_space::ASpace)
 end
 
 
-function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_space::ASpace, observation_space::OSpace) where {ASpace, OSpace}
+function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_space::ASpace, observation_space::OSpace, pomdp::POMDP) where {ASpace, OSpace, POMDP}
     A = eltype(action_space)
     O = eltype(observation_space)
     init_eta = Vector{Dict{Pair{A,O},Int64}}(undef, max_node_size)
@@ -164,15 +164,16 @@ function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_sp
     init_nodes = Vector{FscNode}()
     init_prunned_node_list = Vector{Int64}()
 
-    return FSC(init_eta,
-        init_nodes_VQMDP_labels,
-        init_obs_kmeans_centroids,
-        init_nodes,
-        max_accept_belief_gap,
-        max_node_size,
-        action_space,
-        observation_space,
-        init_prunned_node_list
+    return FSC(pomdp,
+            init_eta,
+            init_nodes_VQMDP_labels,
+            init_obs_kmeans_centroids,
+            init_nodes,
+            max_accept_belief_gap,
+            max_node_size,
+            action_space,
+            observation_space,
+            init_prunned_node_list
        )
 
 end
