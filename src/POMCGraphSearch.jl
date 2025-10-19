@@ -10,7 +10,7 @@ using Printf
 using DataFrames, CSV
 using LinearAlgebra
 using StatsBase
-using POMDPTools: discounted_reward, eachstep, HistoryRecorder
+using POMDPTools: discounted_reward, eachstep, HistoryRecorder, SparseCat
 
 include("ModelWrapper.jl")
 include("Qlearning.jl")

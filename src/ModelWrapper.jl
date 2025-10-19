@@ -45,7 +45,7 @@ function InitModel(pomdp::POMDP,
 
     state_space_type, states = detect_state_space(pomdp)
     b0 = initialstate(pomdp)  # initial belief state
-    particles = [rand(b0) for _ in 1:num_b0_particles]  # sample particles from the initial belief
+    particles = generate_initial_particles(b0, num_b0_particles)
 
     # for discrete state POMDPs
     Cache_s_to_index = Dict{statetype(pomdp), Int}()            # s -> sI

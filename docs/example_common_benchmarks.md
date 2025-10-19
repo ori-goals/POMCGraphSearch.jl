@@ -3,6 +3,8 @@
 This section provides recommended settings for the benchmarks reported in the POMCGS paper.  
 Users can further tune parameters.
 For example, by increasing `max_planning_secs` or `num_sim_per_sa`, or decreasing `max_b_gap`, to derive an offline policy with higher performance.
+Reference computation time for each domain is also provided given an modern i7 CPU.
+
 
 ---
 
@@ -22,7 +24,7 @@ pomcgs = SolverPOMCGS(pomdp;
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
 POMCGS typically solves **RockSample(7,8)** within **1–5 minutes** (depending on hardware).  
@@ -42,7 +44,7 @@ pomcgs = SolverPOMCGS(pomdp;
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
 For **RockSample(11,11)**, POMCGS generally obtains a good offline policy (lower bound comparable to online planners, e.g., value ≈ 12–17) in **under 1 hour**.  Longer runtime may further improve performance (note that the default timeout is 10,000 seconds).
@@ -59,15 +61,17 @@ pomcgs = SolverPOMCGS(pomdp;
     max_search_depth = 40,
     num_sim_per_sa = 20,
     max_planning_secs = 36000.0,
-    nb_particles = 50000
+    nb_particles = 50000,
+    nb_sim_VMDP = 50000,
+    epsilon_VMDP = 0.01
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
-For **RockSample(15,15)**, POMCGS generally obtains a good offline policy (lower bound comparable to online planners, e.g., value ≈ 10–15) in 5-9 hours. 
-We recommend at least **64 GB of RAM**, as this problem is large and memory-intensive.
+For **RockSample(15,15)**, POMCGS typically obtains a good offline policy, achieving a lower bound comparable to online planners (for example, value ≈ 10–15) within **6 to 9 hours** of computation. The initialization of computing `VMDP` may take 2 hours. We recommend using at least **64 GB of RAM**, as this problem is large scale and memory intensive.
+
 
 ---
 
@@ -87,7 +91,7 @@ pomcgs = SolverPOMCGS(pomdp;
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
 For **LightDark**, POMCGS typically reaches a lower bound value > 3.0 within **10–30 seconds**.  
@@ -123,10 +127,11 @@ pomcgs = SolverPOMCGS(pomdp;
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
-
-For **Lidar Roomba**, with Action Progressive Widening (APW) enabled,  POMCGS often reaches a good lower bound (0.5~1.0) in about 2–3 hours.
+Note that rand(actions(pomdp)) is not properly implemented in the current RoombaPOMDP.jl package.
+In this example, we use a large number of discrete actions (286 actions) and then apply action progressive widening (APW) on this action space.
+For **Lidar Roomba**, with APW enabled,  POMCGS often reaches a good lower bound (0.5~1.0) in about 2–3 hours.
 
 ---
 
@@ -135,7 +140,7 @@ For **Lidar Roomba**, with Action Progressive Widening (APW) enabled,  POMCGS of
 ```julia
 using POMCGraphSearch, POMDPs, RoombaPOMDPs
 
-num_x_pts, num_y_pts, num_th_pts = 25, 16, 10
+num_x_pts, num_y_pts, num_th_pts = 41, 26, 20
 sspace = DiscreteRoombaStateSpace(num_x_pts, num_y_pts, num_th_pts)
 
 max_speed, speed_interval = 5.0, 0.2
@@ -149,18 +154,21 @@ pomdp = RoombaPOMDP(sensor=Bumper(),
     v_max=max_speed, sspace=sspace))
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_search_depth = 50,
-    max_b_gap = 0.1,
+    max_search_depth = 60,
+    max_b_gap = 0.05,
     bool_APW = true,
-    num_sim_per_sa = 10,
-    C_star = 1000
+    num_sim_per_sa = 100,
+    C_star = 1000,
+    nb_particles = 100000,
+    nb_sim_VMDP = 50000,
+    max_planning_secs = 36000.0
 )
 
 fsc = solve(pomcgs, pomdp)
-run_batch_simulation(pomdp, fsc; n_simulations=10000)
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
+**Bumper Roomba** is a much harder problem than **Lidar Roomba**, as the robot relies only on a bumper sensor. For **Bumper Roomba**, with APW enabled, POMCGS generally finds a complete offline policy that outperforms online planners within **6 to 8 hours** of computation.
 
-For **Bumper Roomba**, with APW enabled, POMCGS generally achieves a lower bound around 0.0 within 3-5 hours.
 
 ---
 

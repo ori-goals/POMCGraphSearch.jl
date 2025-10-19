@@ -96,9 +96,9 @@ SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 
 ### Settings for Common Benchmarks
 
-We provide detailed configuration examples for several common POMDP benchmarks — including **RockSample(7,8)**, **RockSample(11,11)**, **RockSample(15,15)**, **LightDark**, **Bumper Roomba**, and **Lidar Roomba** — in the file [**`/docs/example_common_benchmarks.md`**](./docs/example_common_benchmarks.md).
+We provide detailed configuration examples for several common POMDP benchmarks including **RockSample(7,8)**, **RockSample(11,11)**, **RockSample(15,15)**, **LightDark**, **Bumper Roomba**, and **Lidar Roomba** in the file [**`/docs/example_common_benchmarks.md`**](./docs/example_common_benchmarks.md).
 
-These examples reproduce the experiments reported in the POMCGS paper and serve as good starting points for tuning parameters in other domains.
+These examples are the benchmarks listed in the POMCGS paper and may serve as good starting points for tuning parameters in other domains.
 
 
 ---
