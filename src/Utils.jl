@@ -305,3 +305,63 @@ function GetMap2RawStatesAndObsClusters_Weighted_Random(
 
     return obs_clusters, kmeans_result
 end
+
+
+function generate_initial_particles(b0::B, num_particles::Int) where {B}
+    # --- Case 1: Dict or OrderedDict
+    if b0 isa AbstractDict
+        states = collect(keys(b0))
+        probs = collect(values(b0))
+        probs ./= sum(probs)
+        counts = round.(Int, probs .* num_particles)
+        
+        # Adjust rounding error to make total exact
+        total = sum(counts)
+        if total != num_particles
+            diff = num_particles - total
+            # assign extras to largest probs
+            order = sortperm(probs, rev=true)
+            for i in 1:abs(diff)
+                idx = order[mod1(i, length(order))]
+                counts[idx] += sign(diff)
+            end
+        end
+        
+        # Expand into particles
+        return vcat([fill(states[i], counts[i]) for i in eachindex(states)]...)
+    end
+
+    # --- Case 2: SparseCat
+    if b0 isa SparseCat
+        vals, probs = b0.vals, b0.probs
+        probs ./= sum(probs)
+        counts = round.(Int, probs .* num_particles)
+        total = sum(counts)
+        if total != num_particles
+            diff = num_particles - total
+            order = sortperm(probs, rev=true)
+            for i in 1:abs(diff)
+                idx = order[mod1(i, length(order))]
+                counts[idx] += sign(diff)
+            end
+        end
+        return vcat([fill(vals[i], counts[i]) for i in eachindex(vals)]...)
+    end
+
+    # --- Case 3: Vector of states (uniform)
+    if b0 isa AbstractVector
+        n = length(b0)
+        full_repeats = div(num_particles, n)
+        remainder = mod(num_particles, n)
+        return vcat([b0 for _ in 1:full_repeats]..., b0[1:remainder])
+    end
+
+
+    # --- Case 4: Generic with rand(b0)
+    if hasmethod(rand, (typeof(b0),))
+        particles = [rand(b0) for _ in 1:num_particles]  # sample particles from the initial belief
+        return particles
+    end
+
+    throw(ArgumentError("Unsupported belief type $(typeof(b0))"))
+end
