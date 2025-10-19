@@ -70,7 +70,7 @@ fsc = solve(pomcgs, pomdp)
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
-For **RockSample(15,15)**, POMCGS typically obtains a good offline policy, achieving a lower bound comparable to online planners (for example, value ≈ 10–15) within **6 to 9 hours** of computation. The initialization of computing `VMDP` may take 2 hours. We recommend using at least **64 GB of RAM**, as this problem is large scale and memory intensive.
+For **RockSample(15,15)**, POMCGS typically obtains a good offline policy(for example, lower bound value ≈ 10–15) within **6 to 9 hours** of computation. We recommend using at least **64 GB of RAM**, as this problem is large scale and memory intensive.
 
 
 ---
