@@ -131,7 +131,7 @@ run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 Note that rand(actions(pomdp)) is not properly implemented in the current RoombaPOMDP.jl package.
 In this example, we use a large number of discrete actions (286 actions) and then apply action progressive widening (APW) on this action space.
-For **Lidar Roomba**, with APW enabled,  POMCGS often reaches a good lower bound (0.5~1.0) in about 2–3 hours.
+For **Lidar Roomba**, with APW enabled,  POMCGS often reaches a good lower bound (0.5~1.0) in about 1 hours.
 
 ---
 
@@ -140,7 +140,7 @@ For **Lidar Roomba**, with APW enabled,  POMCGS often reaches a good lower bound
 ```julia
 using POMCGraphSearch, POMDPs, RoombaPOMDPs
 
-num_x_pts, num_y_pts, num_th_pts = 41, 26, 20
+num_x_pts, num_y_pts, num_th_pts = 25, 16, 10
 sspace = DiscreteRoombaStateSpace(num_x_pts, num_y_pts, num_th_pts)
 
 max_speed, speed_interval = 5.0, 0.2
@@ -154,20 +154,18 @@ pomdp = RoombaPOMDP(sensor=Bumper(),
     v_max=max_speed, sspace=sspace))
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_search_depth = 60,
-    max_b_gap = 0.05,
-    bool_APW = true,
-    num_sim_per_sa = 100,
-    C_star = 1000,
-    nb_particles = 100000,
-    nb_sim_VMDP = 50000,
-    max_planning_secs = 36000.0
+                max_search_depth = 70,
+                max_b_gap = 0.05,
+                bool_APW = true,
+                num_sim_per_sa = 100,
+                C_star = 1000,
+                max_planning_secs = 20000.0
 )
 
 fsc = solve(pomcgs, pomdp)
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
-**Bumper Roomba** is a much harder problem than **Lidar Roomba**, as the robot relies only on a bumper sensor. For **Bumper Roomba**, with APW enabled, POMCGS generally finds a complete offline policy that outperforms online planners within **6 to 8 hours** of computation.
+**Bumper Roomba** is a much harder problem than **Lidar Roomba**, as the robot relies only on a bumper sensor. For **Bumper Roomba**, with APW enabled, POMCGS generally finds a complete offline policy that outperforms online planners (value > 0.0) around 3 hours of computation.
 
 
 ---

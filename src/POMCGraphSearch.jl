@@ -73,7 +73,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                     # --- Problem model defaults ---
                     num_sim_per_sa::Int64 = 100, # default 100
 					state_grid::Vector{Float64} = Vector{Float64}(),
-                    num_init_APW_actions::Int = 10, # default number of init fixed actions for continuous action spaces
+                    num_init_APW_actions::Int = 20, # default number of init fixed actions for continuous action spaces
                     num_action_APW_threshold::Int = 30, # if the action space is larger then this value, use APW
                     num_fixed_observations::Int = 20,
                     max_num_particles::Int = 10_0000,
