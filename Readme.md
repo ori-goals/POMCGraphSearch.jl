@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs\POMCGS_logo.png" alt="Logo" width="150" height="100">
+  <img src="docs\POMCGS_logo.svg" alt="Logo" width="600" height="200">
 </div>
 
 # Partially Observable Monte-Carlo Graph Search
