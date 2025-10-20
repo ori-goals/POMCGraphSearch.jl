@@ -89,7 +89,7 @@ function detect_action_space(pomdp::POMDP, num_action_APW_threshold::Int, num_in
             if num_actions > num_action_APW_threshold
                 println("Action number ($num_actions) is large, applying action progressive widening (APW)")
                 bool_APW = true
-                action_space = [rand(acts) for _ in 1:num_init_APW_actions]
+                action_space = get_uniform_actions(acts, num_init_APW_actions)
                 return :continuous_sampleable, ASpace, action_space
             end
             return :discrete, ASpace, acts, false
@@ -97,7 +97,7 @@ function detect_action_space(pomdp::POMDP, num_action_APW_threshold::Int, num_in
 
         # Otherwise, check if rand is defined on actions
         if hasmethod(rand, Tuple{typeof(acts)})
-            action_space = [rand(acts) for _ in 1:num_init_APW_actions]
+            action_space = get_uniform_actions(acts, num_init_APW_actions)
             return :continuous_sampleable, ASpace, action_space
         else
             throw(ArgumentError("The POMDP does not have rand function defined for action sampling."))        
@@ -184,6 +184,58 @@ function detect_observation_space(pomdp::POMDP) where {POMDP}
     end
 end
 
+
+function get_uniform_actions(acts, num_actions::Int)
+    try
+        # Strategy 1: Check if it's a finite discrete set
+        if hasmethod(length, Tuple{typeof(acts)}) && length(acts) < 10000
+            act_list = collect(acts)
+            n_total = length(act_list)
+            
+            if n_total <= num_actions
+                return act_list
+            else
+                # Sample evenly spaced indices
+                step = n_total / num_actions
+                indices = [round(Int, 1 + (i-1) * step) for i in 1:num_actions]
+                return act_list[indices]
+            end
+        end
+        
+        # Strategy 2: Check if it's a numeric range
+        if hasmethod(minimum, Tuple{typeof(acts)}) && hasmethod(maximum, Tuple{typeof(acts)})
+            min_a = minimum(acts)
+            max_a = maximum(acts)
+            return range(min_a, max_a, length=num_actions) |> collect
+        end
+        
+        # Strategy 3: Check if it's a Julia range
+        if acts isa AbstractRange
+            return range(first(acts), last(acts), length=num_actions) |> collect
+        end
+        
+        # Strategy 4: Fallback to diverse random sampling
+        return get_diverse_random_actions(acts, num_actions)
+        
+    catch e
+        # Final fallback: simple random sampling
+        @warn "Failed to get uniform actions, using random sampling: $e"
+        return [rand(acts) for _ in 1:num_actions]
+    end
+end
+
+function get_diverse_random_actions(acts, num_actions::Int; max_attempts::Int=1000)
+    # Try to get diverse actions through multiple random samples
+    actions = Set()
+    attempts = 0
+    
+    while length(actions) < num_actions && attempts < max_attempts
+        push!(actions, rand(acts))
+        attempts += 1
+    end
+    
+    return collect(actions)[1:min(num_actions, length(actions))]
+end
 
 # Function to predict the cluster label for new data points
 function predict_cluster(centers::Matrix{Float64}, s::Vector{Float64})

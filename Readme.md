@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs\POMCGS_logo.png" alt="Logo" width="150" height="100">
+</div>
+
 # Partially Observable Monte-Carlo Graph Search
 
 ## Overview
