@@ -18,16 +18,14 @@ using RockSample
 pomdp = RockSamplePOMDP(7, 8)
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_b_gap = 0.2,                # belief merging threshold
-    max_search_depth = 40,          # maximum search depth
-    num_sim_per_sa = 30             # simulations per action per state particle
+    max_b_gap = 0.2                # belief merging threshold
 )
 
 fsc = solve(pomcgs, pomdp)
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
-POMCGS typically solves **RockSample(7,8)** within **1–5 minutes** (depending on hardware).  
+POMCGS typically solves **RockSample(7,8)** within **1–3 minutes** (depending on hardware).  
 The resulting policy achieves near-optimal performance, comparable to SARSOP on the same instance.
 
 ---
@@ -47,7 +45,7 @@ fsc = solve(pomcgs, pomdp)
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
-For **RockSample(11,11)**, POMCGS generally obtains a good offline policy (lower bound comparable to online planners, e.g., value ≈ 12–17) in **under 1 hour**.  Longer runtime may further improve performance (note that the default timeout is 10,000 seconds).
+For **RockSample(11,11)**, POMCGS will reach to a good offline policy comparable to SARSOP in **around 1 hour**. 
 
 ---
 
@@ -70,7 +68,7 @@ fsc = solve(pomcgs, pomdp)
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
-For **RockSample(15,15)**, POMCGS typically obtains a good offline policy(for example, lower bound value ≈ 10–15) within **6 to 9 hours** of computation. We recommend using at least **64 GB of RAM**, as this problem is large scale and memory intensive.
+For **RockSample(15,15)**, POMCGS typically obtains a good offline policy(for example, lower bound value ≈ 10–15) within **6 hours** of computation. We recommend using at least **64 GB of RAM**, as this problem is large scale and memory intensive.
 
 
 ---
@@ -122,7 +120,6 @@ pomcgs = SolverPOMCGS(pomdp;
     max_search_depth = 40,
     max_b_gap = 0.2,
     bool_APW = true,
-    num_sim_per_sa = 200,
     num_fixed_observations = 10
 )
 
@@ -154,10 +151,9 @@ pomdp = RoombaPOMDP(sensor=Bumper(),
     v_max=max_speed, sspace=sspace))
 
 pomcgs = SolverPOMCGS(pomdp;
-                max_search_depth = 70,
+                max_search_depth = 80,
                 max_b_gap = 0.05,
                 bool_APW = true,
-                num_sim_per_sa = 100,
                 C_star = 1000,
                 max_planning_secs = 20000.0
 )
