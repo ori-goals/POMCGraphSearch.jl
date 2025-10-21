@@ -155,6 +155,7 @@ pomcgs = SolverPOMCGS(pomdp;
                 max_b_gap = 0.05,
                 bool_APW = true,
                 C_star = 1000,
+                num_sim_per_sa = 500,
                 max_planning_secs = 20000.0
 )
 
