@@ -96,6 +96,9 @@ or
 ```Julia
 SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 ```
+
+Please be aware that the saved FSC is not prunned, it contains edges derived from non-optimal actions.
+
 ---
 
 ### Settings for Common Benchmarks
