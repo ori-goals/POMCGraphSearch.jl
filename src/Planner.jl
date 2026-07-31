@@ -245,10 +245,11 @@ function CollectSamplesAndBuildNewBeliefsWeightedParticles(
     a::A
 ) where {A}
     node = fsc._nodes[nI]
+	O = eltype(fsc._observation_space)
     weighted_particles = node._dict_weighted_samples
 
-    all_oI_weight = Dict{Int64, Float64}()
-    all_dict_weighted_samples = Dict{Int64, OrderedDict{Int, Float64}}()
+    all_oI_weight = Dict{O, Float64}()
+    all_dict_weighted_samples = Dict{O, OrderedDict{Int, Float64}}()
 
     sum_R_a = 0.0
     sum_all_weights = 0.0

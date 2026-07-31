@@ -1,33 +1,36 @@
 mutable struct LogResult
 	_vec_episodes::Vector{Int64}
+    _vec_lower_bound::Vector{Float64}
 	_vec_evaluation_value::Vector{Float64}
+    _vec_evaluation_std::Vector{Float64}
 	_vec_upper_bound::Vector{Float64}
 	_vec_fsc_size::Vector{Int64}
     _vec_time::Vector{Float64}
 end
 
-function ExportLogData(planner::Planner, name::String) where {Planner}
+function ExportLogData(pomcgs::Solver, name::String) where {Solver}
     output_name = name *".csv"
 
+    planner = pomcgs.planner
+
     min_length = min(length(planner._Log_result._vec_episodes),
+                    # length(planner._Log_result._vec_lower_bound),
+                    # length(planner._Log_result._vec_evaluation_std),
                     length(planner._Log_result._vec_evaluation_value),
                     length(planner._Log_result._vec_upper_bound),
-                    length(planner._Log_result._vec_valid_value),
-                    length(planner._Log_result._vec_unvalid_rate),
                     length(planner._Log_result._vec_fsc_size),
                     length(planner._Log_result._vec_time))
 
 
     df = DataFrame(episode = planner._Log_result._vec_episodes[1:min_length],
-                   lower = planner._Log_result._vec_evaluation_value[1:min_length],
+                    # lower = planner._Log_result._vec_lower_bound[1:min_length],
+                    # eval_std = planner._Log_result._vec_evaluation_std[1:min_length],
+                   eval_mean = planner._Log_result._vec_evaluation_value[1:min_length],
                    upper = planner._Log_result._vec_upper_bound[1:min_length],
-                   valid_value = planner._Log_result._vec_valid_value[1:min_length],
-                   unvalid_rate = planner._Log_result._vec_unvalid_rate[1:min_length],
                    fsc_size = planner._Log_result._vec_fsc_size[1:min_length],
                     time = planner._Log_result._vec_time[1:min_length])
     CSV.write(output_name, string.(df))
 end
-
 
 
 function NormalizeDict(d::OrderedDict{Int, Float64})
@@ -416,4 +419,18 @@ function generate_initial_particles(b0::B, num_particles::Int) where {B}
     end
 
     throw(ArgumentError("Unsupported belief type $(typeof(b0))"))
+end
+
+
+
+
+function sample_key_from_weighted_dict(dict::OrderedDict{Int, Float64})
+    # Extract keys and weights
+    keys_vec = collect(keys(dict))
+    weights_vec = collect(values(dict))
+    
+    # Sample one key based on weights
+    sampled_key = sample(keys_vec, Weights(weights_vec))
+    
+    return sampled_key
 end
