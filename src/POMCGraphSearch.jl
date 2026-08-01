@@ -19,7 +19,7 @@ include("FSC.jl")
 include("Planner.jl")
 
 
-export SolverPOMCGS, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, ExportLogData, run_standard_simulation, run_batch_simulations
+export SolverPOMCGS, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, ExportLogData, run_standard_simulation, run_batch_simulations, SolveOnline
 
 mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <: Solver
     # --- Parameters for the problem model ---
@@ -48,6 +48,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
 	nb_sim_VMDP::Int
     epsilon_VMDP::Float64
     ratio_heuristic_Q::Float64
+    VMDP_b0_value::Float64
     # --- Parameters for the POMCGS planner ---
     max_b_gap::Float64
     max_graph_node_size::Int64
@@ -86,6 +87,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
 					nb_sim_VMDP::Int = 10,
                     epsilon_VMDP::Float64 = 0.1,
                     ratio_heuristic_Q::Float64 = 0.0, # ratio of heuristic Q value in FSC node initialization, if 0, no heuristic Q value (pessimistic), if 1, full heuristic Q value (optimistic)
+                    VMDP_b0_value::Float64 = 0.0,
                     # --- Planner defaults ---
                     max_b_gap::Float64 = 0.3,
                     max_graph_node_size::Int64 = 10_000_000,
@@ -183,11 +185,11 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         println("Number of max episodes: ", VMDP_nb_max_episode)
 
 		# if state is discrete
-        TrainingEpisodes(Vmdp, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, model)
+        b0_VMDP_value = TrainingEpisodes(Vmdp, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, model)
 
 		VMDP_heuristic = Vmdp
         # Log result
-        log_result = LogResult(Int64[], Float64[], Float64[], Int64[], Float64[])
+        log_result = LogResult(Int64[], Float64[], Float64[], Float64[], Float64[], Int64[], Float64[])
 
 		b0_processed = OrderedDict{Int,Float64}()
 
@@ -237,13 +239,42 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                           state_space_type,
                           observation_space_type, observation_space, num_fixed_observations, obs_cluster_model,
                           num_sim_per_sa, state_grid,
-                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, ratio_heuristic_Q,
+                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, ratio_heuristic_Q, b0_VMDP_value,
                           max_b_gap, max_graph_node_size, nb_iter,
                           POMDPs.discount(pomdp), epsilon, C_star, kmeans_itr, k_a, alpha_a, bool_APW,      
                           max_search_depth, max_planning_secs, nb_sim_per_iter, nb_eval, log_result, fsc, planner)
     end
 end
 
+
+function Base.show(io::IO, solver::SolverPOMCGS)
+    print(io, "SolverPOMCGS")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", solver::SolverPOMCGS)
+    println(io, "SolverPOMCGS")
+    println(io, "├─ POMDP: $(typeof(solver.pomdp).name.name)")
+    println(io, "├─ Model:")
+    println(io, "│  ├─ Particles: $(solver.nb_particles)")
+    println(io, "│  ├─ Max particles: $(solver.max_num_particles)")
+    println(io, "│  └─ Sim per SA: $(solver.num_sim_per_sa)")
+    println(io, "├─ Spaces:")
+    println(io, "│  ├─ Action: $(solver.action_space_type) (size: $(length(solver.action_space)))")
+    println(io, "│  ├─ State: $(solver.state_space_type)")
+    println(io, "│  └─ Observation: $(solver.observation_space_type) (size: $(length(solver.observation_space)))")
+    println(io, "├─ Planner:")
+    println(io, "│  ├─ Discount: $(solver.discount)")
+    println(io, "│  ├─ Epsilon: $(solver.epsilon)")
+    println(io, "│  ├─ Max depth: $(solver.max_search_depth)")
+    println(io, "│  ├─ Sims/iter: $(solver.nb_sim_per_iter)")
+    println(io, "│  └─ APW: $(solver.bool_APW ? "enabled" : "disabled")")
+    println(io, "├─ Heuristic (VMDP):")
+    println(io, "│  ├─ Q-learning (episodes: $(solver.VMDP_nb_max_episode))")
+    println(io, "│  └─ b0 VMDP value (upper bound estimation): $(solver.VMDP_b0_value)")
+    println(io, "├─ FSC:")
+    println(io, "│  ├─ Max B-gap: $(solver.max_b_gap)")
+    println(io, "│  └─ Max nodes: $(solver.max_graph_node_size)")
+end
 
 function kmeans_clustering_function(data::AbstractMatrix{<:AbstractFloat}, num_clusters::Int; maxiter::Int=50)
     result = kmeans(data, num_clusters; maxiter = maxiter)
@@ -325,6 +356,44 @@ function Solve(pomcgs::SolverPOMCGS)
     println("FSC size after prunning: ", length(pomcgs.fsc._prunned_node_list))
     println("FSC lower bound value:", last(pomcgs.planner._Log_result._vec_evaluation_value))
 end
+
+
+function SolveOnline(pomcgs::SolverPOMCGS, max_steps::Int, planning_time::Float64; verbose::Bool = true)
+    println("----- POMCGS Planning -----")
+    println("Initial belief particle size:", length(pomcgs.model.b0_particles))
+    println("Evaluation simulation number:", pomcgs.nb_eval)
+    println("Max search depth:", pomcgs.max_search_depth)
+    # Run planner
+    if pomcgs.planner === nothing
+        throw(ArgumentError("No planner is defined for POMCGS. Please reinitialize POMCGS."))
+    else
+
+        # check if fsc is initialized
+        if pomcgs.fsc._nodes == nothing
+            fsc = InitFSC(pomcgs.max_b_gap, 
+                            pomcgs.max_graph_node_size, 
+                            pomcgs.action_space, 
+                            pomcgs.observation_space, 
+                            pomcgs.pomdp)
+
+            fsc._obs_kmeans_centroids = pomcgs.obs_cluster_model
+            pomcgs.fsc = fsc
+        end
+
+        return SimulationOnline(
+            pomcgs.model,
+            pomcgs.b0_processed,
+            pomcgs.fsc,
+            pomcgs.planner,
+            max_steps,
+            planning_time;
+            verbose = verbose
+        )
+    end
+
+    println("--- Planning finished ---")
+end
+
 
 
 function SaveFSCPolicyJLD2(pomcgs::SolverPOMCGS; outfile_name::Union{Nothing, String}=nothing)

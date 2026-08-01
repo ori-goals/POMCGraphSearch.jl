@@ -24,6 +24,22 @@ mutable struct FSC{A, O, ASpace, OSpace, POMDP} <: Policy
     _prunned_node_list::Vector{Int64}
 end
 
+function Base.show(io::IO, ::MIME"text/plain", fsc::FSC)
+    n_nodes = length(fsc._nodes)
+    n_actions = length(fsc._action_space)
+    n_obs = length(fsc._observation_space)
+    
+    println(io, "FSC:")
+    println(io, "  Nodes: $n_nodes")
+    println(io, "  Actions: $n_actions")
+    println(io, "  Observations: $n_obs")
+    
+    
+    if !isempty(fsc._obs_kmeans_centroids)
+        println(io, "  Clusters: $(size(fsc._obs_kmeans_centroids, 1))")
+    end
+end
+
 # Belief updater for FSC - tracks current node as belief
 struct FSCBeliefUpdater{A, O, ASpace, OSpace, POMDP} <: Updater
     fsc::FSC{A, O, ASpace, OSpace, POMDP}

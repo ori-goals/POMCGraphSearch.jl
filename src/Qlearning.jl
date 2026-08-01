@@ -141,4 +141,6 @@ function TrainingEpisodes(
         println("Avg Value: ", current_avg_value)
         episode += 1
     end
+
+    return current_avg_value
 end
