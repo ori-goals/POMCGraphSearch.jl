@@ -44,7 +44,7 @@ function NormalizeDict(d::OrderedDict{Int, Float64})
 	end
 end
 
-function merge_and_normalize_beliefs(all_dict_weighted_samples::Dict{Int, OrderedDict{Int, Float64}})
+function merge_and_normalize_beliefs(all_dict_weighted_samples::Dict{O, OrderedDict{Int, Float64}}) where {O}
     merged = OrderedDict{Int, Float64}()
 
     # 1. Accumulate weights for each state across all beliefs
@@ -256,110 +256,162 @@ function GetMap2RawStatesAndObsClusters_Weighted_Random(
     replication_scale::Float64 = 20.0
 ) where {POMDP, ASpace}
 
+    # ========== 1. Sampling ==========
     obs_samples = Vector{Vector{Float64}}()
-    reward_weights = Float64[]
+    reward_values = Float64[]
     
-    # Track reward range
-    r_min = Inf
-    r_max = -Inf
-    total_rewards = 0.0
-    reward_count = 0
-
-    b0 = initialstate(pomdp)  # initial belief state
-
+    b0 = initialstate(pomdp)
+    
+    @info "Collecting observation samples from random policy..."
+    
     for traj in 1:num_trajectories
         s = rand(b0)
-
         for t in 1:trajectory_length
             if POMDPs.isterminal(pomdp, s)
                 break
             end
-
-            # --- Use random action ---
+            
             a = rand(action_space)
-
-            # --- Simulate step ---
             sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a)
             obs_vec = convert_o(Vector{Float64}, o, pomdp)
+            
             push!(obs_samples, obs_vec)
+            push!(reward_values, r)
             
-            # Update reward statistics
-            r_min = min(r_min, r)
-            r_max = max(r_max, r)
-            total_rewards += r
-            reward_count += 1
-            
-            # Record raw reward for later weight calculation
-            push!(reward_weights, r)
-
             s = sp
         end
     end
-
+    
     if isempty(obs_samples)
         error("No observation samples collected. Check POMDP's convert_o or simulator.")
     end
-
-    # Print detailed reward statistics
-    r_mean = total_rewards / reward_count
-    @info "Reward Statistics from Random Policy Exploration:" *
-          "\n  - R_min: $r_min" *
-          "\n  - R_max: $r_max" * 
-          "\n  - R_mean: $r_mean" *
-          "\n  - Total samples: $reward_count" *
-          "\n  - Reward range: $(r_max - r_min)"
     
-    # Check if exploration is sufficient
-    if r_max - r_min < 1e-6
-        @warn "Very small reward range detected. Random policy may not be exploring the environment sufficiently."
-    elseif r_max == r_min
-        @warn "All rewards are identical. Consider increasing exploration or checking environment dynamics."
+    n_samples = length(obs_samples)
+    @info "Collected $n_samples observations"
+    
+    # ========== 2. Find max reward observations==========
+    r_max = maximum(reward_values)
+    r_min = minimum(reward_values)
+    
+    max_indices = findall(reward_values .== r_max)
+    
+    @info "Max reward: $r_max, found $(length(max_indices)) samples with this reward"
+    
+    # ========== 3. Save max reward observations ==========
+    if isempty(max_indices)
+        error("No samples with max reward found!")
     end
-
-    # Calculate relative absolute weights
-    if r_max ≈ r_min  # All rewards are the same
-        relative_weights = ones(length(reward_weights))
-        @info "Using uniform weights (all rewards are equal)"
+    
+    max_obs = [obs_samples[i] for i in max_indices]
+    
+    if length(max_obs) >= 2
+        max_obs_matrix = hcat(max_obs...)
+        extreme_center = mean(max_obs_matrix, dims=2)[:]
+        @info "Using mean of $(length(max_obs)) max-reward observations as extreme cluster center"
     else
-        # Use relative absolute value: |r - r_min| / (r_max - r_min)
-        relative_weights = [abs(r - r_min) / (r_max - r_min) for r in reward_weights]
-        
-        # Ensure minimum weight is not zero
-        min_weight = 0.1  # Avoid zero weights
-        relative_weights = [max(w, min_weight) for w in relative_weights]
-        
-        @info "Weight statistics: min=$(minimum(relative_weights)), max=$(maximum(relative_weights)), mean=$(mean(relative_weights))"
+        extreme_center = max_obs[1][:]
+        @info "Using single max-reward observation as extreme cluster center"
     end
-
-    # Convert to matrix
-    obs_matrix = hcat(obs_samples...)
-
-    # --- Replication function ---
-    function replicate_by_weight(X::Matrix{Float64}, weights::Vector{Float64}, scale::Float64)
+    
+    @info "Extreme cluster center (first 5 dims): $(extreme_center[1:min(5, length(extreme_center))])"
+    
+    # ========== 4. Other observations ==========
+    other_indices = findall(reward_values .< r_max)
+    
+    if isempty(other_indices)
+        @warn "All observations have the same reward ($r_max). Returning single cluster."
+        dummy_kmeans = (centers = hcat(extreme_center),
+                       totalcost = 0.0,
+                       assignments = ones(Int, length(obs_samples)),
+                       counts = [length(obs_samples)])
+        return [extreme_center], dummy_kmeans
+    end
+    
+    other_obs = [obs_samples[i] for i in other_indices]
+    other_rewards = [reward_values[i] for i in other_indices]
+    
+    @info "Other samples: $(length(other_obs)) with rewards in [$r_min, $r_max)"
+    
+    # ========== 5. Compute other observation weights ==========
+    if r_max > r_min
+        other_normalized = (other_rewards .- r_min) ./ (r_max - r_min)
+        distance_to_max = 1.0 .- other_normalized
+        weights = distance_to_max .^ 2 .+ 0.1
+        weights = weights ./ mean(weights)
+    else
+        weights = ones(length(other_obs))
+    end
+    
+    @info "Weight statistics: min=$(minimum(weights)), max=$(maximum(weights)), mean=$(mean(weights))"
+    
+    # ========== 6. Replicate ==========
+    function replicate_by_weight(X::Matrix{Float64}, w::Vector{Float64}, scale::Float64)
         cols = Vector{Vector{Float64}}()
         N = size(X, 2)
+        total = 0
         for j in 1:N
-            w = max(1, Int(round(weights[j] * scale)))
-            for _ in 1:w
+            count = max(1, Int(round(w[j] * scale)))
+            total += count
+            for _ in 1:count
                 push!(cols, X[:, j])
             end
         end
+        @info "Replicated $N samples to $total samples"
         return hcat(cols...)
     end
-
-    @info "Replicating observation samples by relative |reward| with scale=$replication_scale..."
-    obs_matrix_weighted = replicate_by_weight(obs_matrix, relative_weights, replication_scale)
-
-    @info "Running k-means on $(size(obs_matrix_weighted, 2)) (weighted) observation samples..."
-    kmeans_result = kmeans(obs_matrix_weighted, num_obs_clusters; maxiter = 100)
-
-    # Extract cluster centers
-    obs_clusters = [kmeans_result.centers[:, i] for i in 1:size(kmeans_result.centers, 2)]
-
-    @info "Observation clustering complete: $num_obs_clusters clusters created (with relative |reward| weighting)."
-
-    return obs_clusters, kmeans_result
+    
+    other_matrix = hcat(other_obs...)
+    other_weighted = replicate_by_weight(other_matrix, weights, replication_scale)
+    
+    # ========== 7. Clustering ==========
+    remaining_clusters = max(1, num_obs_clusters - 1)
+    actual_k = min(remaining_clusters, size(other_weighted, 2))
+    
+    if actual_k >= 2
+        @info "Clustering remaining observations into $actual_k clusters..."
+        kmeans_other = kmeans(other_weighted, actual_k; maxiter=100)
+        other_centers = [kmeans_other.centers[:, i] for i in 1:size(kmeans_other.centers, 2)]
+    elseif actual_k == 1
+        @info "Only one remaining cluster, using mean"
+        other_centers = [mean(other_weighted, dims=2)[:]]
+        kmeans_other = (centers = hcat(other_centers[1]),
+                       totalcost = 0.0,
+                       assignments = ones(Int, size(other_weighted, 2)),
+                       counts = [size(other_weighted, 2)])
+    else
+        error("No remaining observations to cluster!")
+    end
+    
+    # ========== 8. Combine all clusters ==========
+    all_centers = [extreme_center]
+    append!(all_centers, other_centers)
+    
+    @info "Final clustering: $(length(all_centers)) clusters (1 max-reward cluster + $(length(other_centers)) normal clusters)"
+    
+    # ========== 9. Build kmeans_result ==========
+    full_centers = hcat([c for c in all_centers]...)
+    
+    all_obs_matrix = hcat(obs_samples...)
+    distances = [sum((all_obs_matrix[:, i] .- full_centers[:, j]) .^ 2) 
+                 for i in 1:size(all_obs_matrix, 2), j in 1:size(full_centers, 2)]
+    assignments = [argmin(distances[i, :]) for i in 1:size(distances, 1)]
+    
+    counts = [count(x -> x == j, assignments) for j in 1:size(full_centers, 2)]
+    
+    totalcost = sum([sum((all_obs_matrix[:, i] .- full_centers[:, assignments[i]]) .^ 2) 
+                     for i in 1:size(all_obs_matrix, 2)])
+    
+    kmeans_result = (centers = full_centers,
+                    totalcost = totalcost,
+                    assignments = assignments,
+                    counts = counts)
+    
+    # ========== 10. Print ==========
+    @info "Cluster sizes: $(counts)"
+    
+    return all_centers, kmeans_result
 end
+
 
 
 function generate_initial_particles(b0::B, num_particles::Int) where {B}

@@ -10,8 +10,8 @@ mutable struct Planner
 	_nb_sim::Int64								 
 	_nb_eval::Int64                              
 	_Q_learning_policy::Qlearning
+	_lower_bound_policy::LowerBoundPolicy
 	_Log_result::LogResult
-	_ratio_heuristic_Q::Float64
 	_k_a::Float64
     _alpha_a::Float64
     _bool_APW::Bool
@@ -25,7 +25,7 @@ function ProcessActionWeightedParticle(model::Model,
 										a::A,
 										discount::Float64,
 										Q_learning_policy::Qlearning,
-										ratio_heuristic_Q::Float64
+										lower_bound_policy::LowerBoundPolicy
 										) where {A}
 
 
@@ -38,18 +38,6 @@ function ProcessActionWeightedParticle(model::Model,
 	fsc._nodes[nI]._R_action[a] = sum_R_a
 	expected_future_V = 0.0
 
-
-	merged_belief_for_unexpected_obs = merge_and_normalize_beliefs(all_dict_weighted_samples)
-
-	# find unexpected observations
-	for o in fsc._observation_space
-		if !haskey(all_dict_weighted_samples, o)
-			# for unexpected observations, link to merged belief (belief update with only the action)
-			all_dict_weighted_samples[o] = merged_belief_for_unexpected_obs
-			all_oI_weight[o] = 0.0
-		end
-	end
-
 	# for each new belief, check distances to existing belief nodes, and create new nodes if needed
 	for (key, value) in all_dict_weighted_samples
 		NormalizeDict(all_dict_weighted_samples[key])
@@ -59,8 +47,7 @@ function ProcessActionWeightedParticle(model::Model,
 																		model)
 		bool_search, n_nextI = SearchOrInsertBelief(fsc, all_dict_weighted_samples[key], heuristic_value, fsc._max_accept_belief_gap)
         if !bool_search
-            max_Q = HeuristicNodeQ(fsc._nodes[n_nextI], heuristic_Q_actions, ratio_heuristic_Q)
-			fsc._nodes[n_nextI]._V_node = max_Q
+			HeuristicNodeQ(fsc._nodes[n_nextI], heuristic_Q_actions, lower_bound_policy)
 		end
 		fsc._eta[nI][Pair(a, key)] = n_nextI
 		obs_weight = all_oI_weight[key]
@@ -83,7 +70,7 @@ function Simulate(model::Model,
 				C_star::Int64,
 				epsilon::Float64,
 				Q_learning_policy::Qlearning,
-				ratio_heuristic_Q::Float64,
+				lower_bound_policy::LowerBoundPolicy,
 				bool_APW::Bool,
 				k_a::Float64,
 				alpha_a::Float64)
@@ -115,12 +102,12 @@ function Simulate(model::Model,
 											a, 
 											discount, 
 											Q_learning_policy, 
-											ratio_heuristic_Q)
+											lower_bound_policy)
 	end
 
 	sp, o, r = Step(model, s, a)
-	nI_next = fsc._eta[nI][Pair(a, o)]
-
+	# nI_next = fsc._eta[nI][Pair(a, o)]
+	nI_next = transition(fsc, nI, a, o)
 
 	esti_V = fsc._nodes[nI]._R_action[a] + discount * Simulate(model, 
 																fsc, 
@@ -132,7 +119,7 @@ function Simulate(model::Model,
 																C_star, 
 																epsilon, 
 																Q_learning_policy, 
-																ratio_heuristic_Q, 
+																lower_bound_policy,
 																bool_APW,
 																k_a,
 																alpha_a)
@@ -160,7 +147,7 @@ function MCGraphSearchPOMDP(model::Model,
 																	planner._Q_learning_policy, 
 																	model)
 
-	HeuristicNodeQ(node_start, heuristic_Q_actions, planner._ratio_heuristic_Q)
+	HeuristicNodeQ(node_start, heuristic_Q_actions, planner._lower_bound_policy)
 	push!(fsc._nodes, node_start)
     push!(fsc._nodes_VQMDP_labels, maximum(values(node_start._Heuristic_Q_action)))
 
@@ -192,7 +179,7 @@ function MCGraphSearchPOMDP(model::Model,
 				planner._C_star,
 				planner._epsilon,
 				planner._Q_learning_policy,
-				planner._ratio_heuristic_Q,
+				planner._lower_bound_policy,
 				planner._bool_APW,
 				planner._k_a,
 				planner._alpha_a)
@@ -319,7 +306,7 @@ function SimulationOnline(model::Model,
 																	model)
 
 
-	HeuristicNodeQ(node_start, heuristic_Q_actions, planner._ratio_heuristic_Q)
+	HeuristicNodeQ(node_start, heuristic_Q_actions, planner._lower_bound_policy)
 	push!(fsc._nodes, node_start)
     push!(fsc._nodes_VQMDP_labels, maximum(values(node_start._Heuristic_Q_action)))
 
@@ -349,7 +336,7 @@ function SimulationOnline(model::Model,
 					planner._C_star,
 					planner._epsilon,
 					planner._Q_learning_policy,
-					planner._ratio_heuristic_Q,
+					planner._lower_bound_policy,
 					planner._bool_APW,
 					planner._k_a,
 					planner._alpha_a)

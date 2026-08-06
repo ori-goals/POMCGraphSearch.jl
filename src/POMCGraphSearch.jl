@@ -13,7 +13,7 @@ using StatsBase
 using POMDPTools: discounted_reward, eachstep, HistoryRecorder, SparseCat
 
 include("ModelWrapper.jl")
-include("Qlearning.jl")
+include("Heuristic.jl")
 include("Utils.jl")
 include("FSC.jl")
 include("Planner.jl")
@@ -47,7 +47,6 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
     nb_samples_VMDP::Int
 	nb_sim_VMDP::Int
     epsilon_VMDP::Float64
-    ratio_heuristic_Q::Float64
     VMDP_b0_value::Float64
     # --- Parameters for the POMCGS planner ---
     max_b_gap::Float64
@@ -82,11 +81,10 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                     # --- VMDP heuristic defaults ---
                     # VMDP_heuristic::Any = nothing,
 					nb_episode_size::Int = 30,
-					VMDP_nb_max_episode::Int = 20,
+					VMDP_nb_max_episode::Int = 30,
                     nb_samples_VMDP::Int = 5000,
-					nb_sim_VMDP::Int = 10,
+					nb_sim_VMDP::Int = 20,
                     epsilon_VMDP::Float64 = 0.1,
-                    ratio_heuristic_Q::Float64 = 0.0, # ratio of heuristic Q value in FSC node initialization, if 0, no heuristic Q value (pessimistic), if 1, full heuristic Q value (optimistic)
                     VMDP_b0_value::Float64 = 0.0,
                     # --- Planner defaults ---
                     max_b_gap::Float64 = 0.3,
@@ -117,14 +115,6 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         O = obstype(pomdp)
         O_discrete = observation_space_type == :discrete ? O : Int
 
-        # if user not specify a ratio_heuristic_Q value (0.0), then automatically init it 
-        if ratio_heuristic_Q == 0.0
-            if observation_space_type == :discrete 
-                ratio_heuristic_Q = 0.01
-            else 
-                ratio_heuristic_Q = 0.8
-            end
-        end
 
         # if continuous observations, discretize the observation space
         obs_cluster_model = zeros(Float64, 0, 0)
@@ -191,6 +181,9 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         # Log result
         log_result = LogResult(Int64[], Float64[], Float64[], Float64[], Float64[], Int64[], Float64[])
 
+        lower_bound_policy = LowerBoundPolicy(collect(keys(V_table)), action_space, model, nb_sim_VMDP, max_search_depth, VMDP_heuristic._R_min, discount(model))
+
+
 		b0_processed = OrderedDict{Int,Float64}()
 
         for s in b0_particles
@@ -226,8 +219,8 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                             nb_sim_per_iter, 
                             nb_eval, 
                             VMDP_heuristic,
+                            lower_bound_policy,
                             log_result,
-                            ratio_heuristic_Q,
                             k_a,
                             alpha_a,
                             bool_APW) 
@@ -239,7 +232,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                           state_space_type,
                           observation_space_type, observation_space, num_fixed_observations, obs_cluster_model,
                           num_sim_per_sa, state_grid,
-                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, ratio_heuristic_Q, b0_VMDP_value,
+                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, b0_VMDP_value,
                           max_b_gap, max_graph_node_size, nb_iter,
                           POMDPs.discount(pomdp), epsilon, C_star, kmeans_itr, k_a, alpha_a, bool_APW,      
                           max_search_depth, max_planning_secs, nb_sim_per_iter, nb_eval, log_result, fsc, planner)

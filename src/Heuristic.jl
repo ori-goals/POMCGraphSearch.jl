@@ -144,3 +144,130 @@ function TrainingEpisodes(
 
     return current_avg_value
 end
+
+
+
+mutable struct LowerBoundPolicy{A, ASpace}
+    alphas::Dict{A, Dict{Int, Float64}}
+    action_space::ASpace
+    R_min::Float64
+end
+
+function LowerBoundPolicy(all_s::Vector{Int}, 
+                          action_space::ASpace, 
+                          model::Model,  
+                          nb_sim::Int64, 
+                          max_depth::Int,
+                          R_min::Float64,
+                          discount::Float64) where {ASpace}
+    A = eltype(action_space)
+    alphas = GetBlindPolicyAlphaVectors(all_s, action_space, model, nb_sim, max_depth, discount)
+    return LowerBoundPolicy{A, ASpace}(alphas, action_space, R_min)
+end
+
+function GetBlindPolicyAlphaVectors(all_s::Vector{Int}, 
+                                    action_space::ASpace, 
+                                    model::Model,  
+                                    nb_sim::Int64, 
+                                    max_depth::Int,
+                                    discount::Float64;
+                                    epsilon::Float64 = 1e-6,
+                                    verbose::Bool = false) where {ASpace}
+    
+    A = eltype(action_space)
+    all_alphas = Dict{A, Dict{Int, Float64}}()
+    total_tasks = length(action_space) * length(all_s)
+    completed = 0
+    
+    for a in action_space
+        all_alphas[a] = Dict{Int, Float64}()
+    end
+    
+    for a in action_space
+        alpha_a = all_alphas[a]
+        
+        for s_init in all_s
+            total_return = 0.0
+            
+            for sim_i in 1:nb_sim
+                s = deepcopy(s_init)
+                step = 0
+                cum_return = 0.0
+                
+                while step < max_depth && !isterminal(model, s)
+                    sp, o, r = Step(model, s, a)
+                    cum_return += (discount^step) * r
+                    s = sp
+                    step += 1
+                    
+                    if (discount^step) < epsilon
+                        break
+                    end
+                end
+                
+                total_return += cum_return
+            end
+            
+            alpha_a[s_init] = total_return / nb_sim
+            completed += 1
+            
+            if verbose && completed % max(1, total_tasks ÷ 10) == 0
+                println("Progress: $(completed)/$total_tasks ($(round(completed/total_tasks*100, digits=1))%)")
+            end
+        end
+    end
+    
+    return all_alphas
+end
+
+function GetValue(policy::LowerBoundPolicy, belief::OrderedDict{Int, Float64})
+    max_value = -Inf
+    best_action = nothing
+    q_values = Dict{eltype(policy.action_space), Float64}()  
+    
+    for a in policy.action_space
+        alpha_a = policy.alphas[a]
+        value = 0.0
+        
+        for (s, prob) in belief
+            if haskey(alpha_a, s)
+                value += prob * alpha_a[s]
+            else
+                value += prob * policy.R_min
+            end
+        end
+        
+        q_values[a] = value  
+        
+        if value > max_value
+            max_value = value
+            best_action = a
+        end
+    end
+    
+    return max_value, best_action, q_values
+end
+
+function GetAction(policy::LowerBoundPolicy, belief::OrderedDict{Int, Float64})
+    _, best_action, _ = GetValue(policy, belief)
+    return best_action
+end
+
+function GetValue(policy::LowerBoundPolicy, belief::OrderedDict{Int, Float64}, action::A) where {A}
+    alpha_a = policy.alphas[action]
+    value = 0.0
+    
+    for (s, prob) in belief
+        if haskey(alpha_a, s)
+            value += prob * alpha_a[s]
+        else
+            value += prob * policy.R_min
+        end        
+    end
+    
+    return value
+end
+
+function GetAlpha(policy::LowerBoundPolicy, action::A) where {A}
+    return policy.alphas[action]
+end

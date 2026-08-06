@@ -6,6 +6,7 @@ mutable struct FscNode{A}
     _visits_node::Int64
     _V_node::Float64
     _best_action::A
+    _blind_policy_action::A
     _dict_weighted_samples::OrderedDict{Int,Float64} # state index -> weight, state index is handled by ModelWrapper
     _actions::Vector{A} # for continuous action space, store the sampled actions
 end
@@ -48,8 +49,7 @@ end
 
 # Get action from FSC node
 function POMDPs.action(fsc::FSC, node_id::Int)
-    # return GetBestAction(fsc._nodes[node_id])
-    return fsc._nodes[node_id]._best_action
+    return GetBestAction(fsc._nodes[node_id])
 end
 
 # Get updater for this policy
@@ -59,11 +59,6 @@ end
 
 # Update belief (node) based on action and observation
 function POMDPs.update(updater::FSCBeliefUpdater, current_node::Int, a::A, observation::O) where {A, O}
-    # Warn if action is not the node's best action
-    # if action != updater.fsc._nodes[current_node]._best_action
-    #     @warn "Action $action is not the best action for node $current_node"
-    # end
-    
     # Handle different observation types
     if updater.fsc._obs_kmeans_centroids != zeros(Float64, 0, 0)
         # Continuous observation: convert to discrete using clustering
@@ -131,6 +126,7 @@ end
 function InitFscNode(action_space::ASpace) where {ASpace}
     A = eltype(action_space)
     best_action = first(action_space)
+    blind_policy_action = first(action_space)
 
     init_actions = []
     # --- init for actions ---
@@ -157,6 +153,7 @@ function InitFscNode(action_space::ASpace) where {ASpace}
                     init_visits_node,
                     init_V_node,
                     best_action,
+                    blind_policy_action,
                     init_dict_weighted_particles,
                     init_actions)
 end
@@ -194,23 +191,18 @@ function InitFSC(max_accept_belief_gap::Float64, max_node_size::Int64, action_sp
 
 end
 
-function GetBestAction(n::FscNode)
-    Q_max = typemin(Float64)
-    best_a = first(keys(n._Q_action))
-    visits = n._visits_action
-    q_actions = n._Q_action
-    
-    @inbounds for (a, q_value) in q_actions
-        if visits[a] > 0 && q_value > Q_max
-            Q_max = q_value
-            best_a = a
-        end
-    end
-    
-    n._best_action = best_a
-    return best_a
-end
 
+function GetBestAction(n::FscNode)
+    _, a = findmax(n._visits_action)
+    n._best_action = a
+
+    if n._visits_action[a] == 0
+        # using blind policy action
+        return n._blind_policy_action
+    end
+
+    return a
+end
 
 function UcbActionSelection(fsc::FSC, nI::Int64, C_star::Int64)
     node_visits = fsc._nodes[nI]._visits_node
@@ -504,7 +496,7 @@ end
 
 
 
-function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{A, Float64}, ratio::Float64) where {A}
+function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{A, Float64}, lower_bound_policy::LowerBoundPolicy) where {A}
 	max_value = typemin(Float64)
 	for (a, value) in node._Q_action
 		value = 0.0
@@ -513,14 +505,21 @@ function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{A, Float64}, ra
         end
 
         node._Heuristic_Q_action[a] = value
-        # node._Q_action[a] = ratio*value
         node._Q_action[a] = value
 
 		if value > max_value
 			max_value = value
 		end
 	end
-	return ratio*max_value
+
+    blind_policy_value, blind_policy_action, _ = GetValue(lower_bound_policy, node._dict_weighted_samples)
+
+    node._blind_policy_action = blind_policy_action
+
+    # a belief node's true value Vb* must be V_blind <= Vb* <= V_upper
+    # just init node value with the mean of V_blind and V_upper
+    # one could also come up with other options
+    node._V_node = (blind_policy_value + max_value)/2
 end
 
 
@@ -589,9 +588,13 @@ function transition(fsc::FSC, nI::Int, a::A, o::O) where {A, O}
 
         if isempty(candidates)
             # println("Warning: No transitions found for action $a from node $nI with observation $o.")
-            return 1  # No transition for this action, go to root node
+            # stay in the same node
+            return nI
         end
-        throw(ArgumentError("Invalid transition with node $nI, action $a, and observation $o."))        
+
+        # return to an random child 
+        return rand(candidates)
+        # throw(ArgumentError("Invalid transition with node $nI, action $a, and observation $o."))        
     end
 end
 
