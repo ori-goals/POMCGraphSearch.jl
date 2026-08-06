@@ -22,7 +22,7 @@ The repository implements POMCGS, an offline planning algorithm that performs Mo
 | `./ModelWrapper.jl` |  Model wrapper for continuous domains |
 | `./Planner.jl` | General POMCGS planner implementation |
 | `./FSC.jl` | Defines the FSC data structure used during planning |
-| `./Qlearning.jl` | Implements the MDP heuristic method |
+| `./Heuristic.jl` | Implements heuristic methods (upper and lower) |
 | `./Utils.jl` | Utility functions |
 
 ---
