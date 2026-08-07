@@ -181,8 +181,8 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         # Log result
         log_result = LogResult(Int64[], Float64[], Float64[], Float64[], Float64[], Int64[], Float64[])
 
-        lower_bound_policy = LowerBoundPolicy(collect(keys(V_table)), action_space, model, nb_sim_VMDP, max_search_depth, VMDP_heuristic._R_min, discount(model))
-
+        lower_bound_policy = LowerBoundPolicy(V_table, action_space, model, max_search_depth, VMDP_heuristic._R_min, discount(model))
+        println("--- Heuristic initialization finished ---")
 
 		b0_processed = OrderedDict{Int,Float64}()
 

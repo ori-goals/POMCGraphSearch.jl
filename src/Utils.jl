@@ -486,3 +486,16 @@ function sample_key_from_weighted_dict(dict::OrderedDict{Int, Float64})
     
     return sampled_key
 end
+
+function sample_keys_uniform(dict::Dict{Int, Float64}, ratio::Float64)
+    n = length(dict)
+    step = max(1, Int(round(1 / ratio)))
+    result = Vector{Int64}()
+    
+    for (i, key) in enumerate(keys(dict))
+        if i % step == 1 
+            push!(result, key)
+        end
+    end
+    return result
+end

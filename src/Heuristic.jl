@@ -153,25 +153,36 @@ mutable struct LowerBoundPolicy{A, ASpace}
     R_min::Float64
 end
 
-function LowerBoundPolicy(all_s::Vector{Int}, 
+function LowerBoundPolicy(V_table::Dict{Int, Float64}, 
                           action_space::ASpace, 
                           model::Model,  
-                          nb_sim::Int64, 
                           max_depth::Int,
                           R_min::Float64,
-                          discount::Float64) where {ASpace}
+                          discount::Float64;
+                          nb_sim::Int64 = 10,
+                          sample_states_ratio::Float64 = 0.1,
+                          sample_states_threshold::Int = 100000) where {ASpace}
     A = eltype(action_space)
-    alphas = GetBlindPolicyAlphaVectors(all_s, action_space, model, nb_sim, max_depth, discount)
+
+    num_states = length(V_table)
+
+    if num_states > sample_states_threshold
+        sampled_s = sample_keys_uniform(V_table, sample_states_ratio)
+    else
+        sampled_s = collect(keys(V_table))
+    end
+
+    alphas = GetBlindPolicyAlphaVectors(sampled_s, action_space, model, nb_sim, max_depth, discount)
     return LowerBoundPolicy{A, ASpace}(alphas, action_space, R_min)
 end
 
-function GetBlindPolicyAlphaVectors(all_s::Vector{Int}, 
+function GetBlindPolicyAlphaVectors(all_s::Vector{Int64}, 
                                     action_space::ASpace, 
                                     model::Model,  
-                                    nb_sim::Int64, 
+                                    nb_sim::Int64,
                                     max_depth::Int,
                                     discount::Float64;
-                                    epsilon::Float64 = 1e-6,
+                                    epsilon::Float64 = 1e-1,
                                     verbose::Bool = false) where {ASpace}
     
     A = eltype(action_space)
