@@ -125,7 +125,7 @@ Visualized policy in Graphviz as shown:
 
 ### Settings for Common Benchmarks
 
-We provide detailed configuration examples for several common POMDP benchmarks including **RockSample(7,8)**, **RockSample(11,11)**, **RockSample(15,15)**, **LightDark**, **Bumper Roomba**, and **Lidar Roomba** in the file [**`/docs/example_common_benchmarks.md`**](./docs/example_common_benchmarks.md).
+We provide detailed configuration examples for several common POMDP benchmarks including **RockSample(7,8)**, **RockSample(11,11)**, **RockSample(15,15)**, **LightDark**, **Tag**, **Bumper Roomba**, and **Lidar Roomba** in the file [**`/docs/example_common_benchmarks.md`**](./docs/example_common_benchmarks.md).
 
 These examples are the benchmarks listed in the POMCGS paper and may serve as good starting points for tuning parameters in other domains.
 
