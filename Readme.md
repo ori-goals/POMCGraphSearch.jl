@@ -50,7 +50,7 @@ using RockSample
 pomdp = RockSamplePOMDP(7, 8)
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_b_gap = 0.2,                # belief merging threshold
+    max_b_gap = 0.3,                # belief merging threshold
     max_search_depth = 30,          # maximum search depth
     num_sim_per_sa = 20 # simulations per action for a given state particle
 )
@@ -98,6 +98,28 @@ SaveFSCPolicyJLD2(pomcgs.fsc) # save the fsc policy to a JLD2 file
 ```
 
 Please be aware that the saved FSC is not prunned, it contains edges derived from non-optimal actions.
+
+To save pruned policy, please run:
+
+```Julia
+SavePrunedPolicyJSON(pomcgs.fsc) # save the pruned policy to a JSON file
+```
+
+You can also export a dot file for visualization with GraphViz. For example:
+
+```Julia
+SavePrunedPolicyDOT(pomcgs.fsc, outfile_name="RS78_policy") # save the pruned RS(7,8) policy to a dot file
+```
+
+Then, one can generate visualization (pdf, png, etc.) via command in Terminal with:
+
+```
+dot -Tpng RS78_policy.dot -o "policy_RS78.png"
+ ```
+
+Visualized policy in Graphviz as shown:
+
+![Policy Visualization](./docs/policy_RS78.png)
 
 ---
 
