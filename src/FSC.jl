@@ -204,22 +204,27 @@ function GetBestAction(n::FscNode)
     return a
 end
 
-function UcbActionSelection(fsc::FSC, nI::Int64, C_star::Int64)
+function UcbActionSelection(fsc::FSC, nI::Int64, C_star::Int64, C_ucb::Float64)
     node_visits = fsc._nodes[nI]._visits_node
     max_value = typemin(Float64)
     current_max_value, selected_a = findmax(fsc._nodes[nI]._Q_action)
 
+    c = C_ucb
 
     if node_visits > C_star
         return selected_a
     end
 
-
     for a in fsc._action_space
         ratio_visit = 0
         node_a_visits = fsc._nodes[nI]._visits_action[a]
 
-        c = (fsc._nodes[nI]._Heuristic_Q_action[a] - fsc._nodes[nI]._Q_action[a])
+        # Check if the user has specified C_ucb
+        if c == -Inf 
+            # give default value (upper - lower)
+            c = (fsc._nodes[nI]._Heuristic_Q_action[a] - fsc._nodes[nI]._Q_action[a])
+        end
+
         if node_a_visits == 0
             ratio_visit = log(node_visits + 1) / 0.1
         else
@@ -238,7 +243,7 @@ function UcbActionSelection(fsc::FSC, nI::Int64, C_star::Int64)
     return selected_a
 end
 
-function ActionProgressiveWidening(fsc::FSC, nI::Int, action_space, K_a::Float64, alpha_a::Float64, C_star::Int64)
+function ActionProgressiveWidening(fsc::FSC, nI::Int, action_space, K_a::Float64, alpha_a::Float64, C_star::Int64, C_ucb::Float64)
     node_visits = fsc._nodes[nI]._visits_node
     current_action_num = length(fsc._nodes[nI]._actions)
     if current_action_num <= K_a*(node_visits^alpha_a) && node_visits < C_star
@@ -246,7 +251,7 @@ function ActionProgressiveWidening(fsc::FSC, nI::Int, action_space, K_a::Float64
         AddNewAction(fsc._nodes[nI], a)
         return a
     else
-        return UcbActionSelection(fsc, nI, C_star) 
+        return UcbActionSelection(fsc, nI, C_star, C_ucb) 
     end
 end
 
@@ -330,14 +335,14 @@ function SearchOrInsertBelief(
 end
 
 
-function Prunning(fsc::FSC; MIN_VISITS::Int = 50)
+function Prunning(fsc::FSC; MIN_VISITS::Int = 0)
     nI = 1
     open_list = [nI]
     result_list = [nI]
     while !isempty(open_list)
         nI = pop!(open_list)
 
-        if  fsc._nodes[nI]._visits_node >= MIN_VISITS
+        if fsc._nodes[nI]._visits_node >= MIN_VISITS
             # Reliable best action: follow policy pruning
             a_best = GetBestAction(fsc._nodes[nI])
                 for (k, v) in fsc._eta[nI]
@@ -521,9 +526,6 @@ function HeuristicNodeQ(node::FscNode, Heuristic_Q_actions::Dict{A, Float64}, lo
 			max_value = value
 		end
 	end
-
-
-
 
     node._V_node = (blind_policy_value + max_value)/2
 end

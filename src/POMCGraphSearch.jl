@@ -19,7 +19,7 @@ include("FSC.jl")
 include("Planner.jl")
 
 
-export SolverPOMCGS, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, ExportLogData, run_standard_simulation, run_batch_simulations, SolveOnline
+export SolverPOMCGS, SaveFSCPolicyJSON, SaveFSCPolicyJLD2, SavePrunedPolicyJSON, SavePrunedPolicyDOT, ExportLogData, run_standard_simulation, run_batch_simulations, SolveOnline
 
 mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <: Solver
     # --- Parameters for the problem model ---
@@ -55,6 +55,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
     discount::Float64
     epsilon::Float64
     C_star::Int64
+    C_ucb::Float64
     kmeans_itr::Int64
     k_a::Float64
     alpha_a::Float64
@@ -92,6 +93,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                     nb_iter::Int64 = 10_000_000,
                     epsilon::Float64 = 0.1,
                     C_star::Int64 = 100,
+                    C_ucb::Float64 = -Inf,
                     kmeans_itr::Int64 = 30,
                     # Action Progressive Widening
                     k_a::Float64 = 2.0,
@@ -182,7 +184,6 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         log_result = LogResult(Int64[], Float64[], Float64[], Float64[], Float64[], Int64[], Float64[])
 
         lower_bound_policy = LowerBoundPolicy(V_table, action_space, model, max_search_depth, VMDP_heuristic._R_min, discount(model))
-        println("--- Heuristic initialization finished ---")
 
 		b0_processed = OrderedDict{Int,Float64}()
 
@@ -194,9 +195,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
             end
         end
 
-
-
-
+        println("--- Heuristic initialization finished ---")
 
 		# Init planner
         bool_continuous_observations = false
@@ -213,7 +212,8 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                             nb_iter, 
                             POMDPs.discount(pomdp),
                             epsilon, 
-                            C_star, 
+                            C_star,
+                            C_ucb, 
                             max_search_depth, 
                             max_planning_secs, 
                             nb_sim_per_iter, 
@@ -234,7 +234,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                           num_sim_per_sa, state_grid,
                           VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, b0_VMDP_value,
                           max_b_gap, max_graph_node_size, nb_iter,
-                          POMDPs.discount(pomdp), epsilon, C_star, kmeans_itr, k_a, alpha_a, bool_APW,      
+                          POMDPs.discount(pomdp), epsilon, C_star, C_ucb, kmeans_itr, k_a, alpha_a, bool_APW,      
                           max_search_depth, max_planning_secs, nb_sim_per_iter, nb_eval, log_result, fsc, planner)
     end
 end
@@ -258,6 +258,8 @@ function Base.show(io::IO, ::MIME"text/plain", solver::SolverPOMCGS)
     println(io, "├─ Planner:")
     println(io, "│  ├─ Discount: $(solver.discount)")
     println(io, "│  ├─ Epsilon: $(solver.epsilon)")
+    println(io, "│  ├─ C_star: $(solver.C_star)")
+    println(io, "│  ├─ C_ucb: $(solver.C_ucb)")
     println(io, "│  ├─ Max depth: $(solver.max_search_depth)")
     println(io, "│  ├─ Sims/iter: $(solver.nb_sim_per_iter)")
     println(io, "│  └─ APW: $(solver.bool_APW ? "enabled" : "disabled")")
@@ -345,7 +347,7 @@ function Solve(pomcgs::SolverPOMCGS)
 
     println("--- Planning finished ---")
     println("Total planning time (secs): ", last(pomcgs.planner._Log_result._vec_time))
-    pomcgs.fsc._prunned_node_list = Prunning(pomcgs.fsc; MIN_VISITS = pomcgs.planner._C_star) # soft prunning, nodes are not removed from fsc._nodes
+    pomcgs.fsc._prunned_node_list = Prunning(pomcgs.fsc) # soft prunning, nodes are not removed from fsc._nodes
     println("FSC size after prunning: ", length(pomcgs.fsc._prunned_node_list))
     println("FSC lower bound value:", last(pomcgs.planner._Log_result._vec_evaluation_value))
 end
@@ -477,6 +479,147 @@ function SaveFSCPolicyJSON(fsc::FSC; outfile_name::Union{Nothing, String}=nothin
         @info "Observation cluster centroids exported to: $cluster_file"
     end
 
+    return filename
+end
+
+function SavePrunedPolicyJSON(fsc::FSC; outfile_name::Union{Nothing, String}=nothing, export_obs_clusters::Bool=true)
+    # Decide output filename
+    filename = if outfile_name === nothing
+        timestamp = Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS")
+        "pruned_fsc_$(timestamp).json"
+    else
+        "pruned_fsc_$(outfile_name)_result.json"
+    end
+
+    num_nodes = length(fsc._prunned_node_list)
+    node_list = fsc._prunned_node_list
+    nodes_json = Vector{Dict{String,Any}}()
+
+    for n in node_list
+        node = fsc._nodes[n]
+
+        # Collect eta transitions for this node (only for best action)
+        eta_entries = []
+        best_a = GetBestAction(node)
+        for (pair, next_n) in fsc._eta[n]
+            if pair.first == best_a
+                push!(eta_entries, Dict(
+                    "action" => string(pair.first),
+                    "observation" => pair.second,
+                    "next_node" => next_n
+                ))
+            end
+        end
+
+        node_dict = Dict(
+            "id" => n,
+            "best_action" => string(node._best_action),
+            "eta" => eta_entries,
+            "visits" => node._visits_node,
+            "value" => node._V_node
+        )
+
+        push!(nodes_json, node_dict)
+    end
+
+    fsc_json = Dict(
+        "num_nodes" => num_nodes,
+        "nodes" => nodes_json
+    )
+
+    # --- Write FSC JSON file (pretty print) ---
+    open(filename, "w") do io
+        JSON.print(io, fsc_json, 4)  # 4 spaces for indentation
+    end
+    @info "Pruned policy exported to JSON: $filename"
+
+    # --- Export observation cluster centroids if they exist ---
+    if export_obs_clusters && !isempty(fsc._obs_kmeans_centroids)
+        obs_kmeans_centroids = Vector{Vector{Float64}}()
+        num_fixed_observations = length(fsc._observation_space)
+        for i in 1:num_fixed_observations
+            push!(obs_kmeans_centroids, fsc._obs_kmeans_centroids[:,i])
+        end
+
+        base = splitext(filename)[1]
+        cluster_file = base * "_obs_clusters.json"
+
+        obs_clusters_json = Dict(
+            "num_clusters" => length(obs_kmeans_centroids),
+            "clusters" => obs_kmeans_centroids
+        )
+
+        open(cluster_file, "w") do io
+            JSON.print(io, obs_clusters_json, 4)  # 4 spaces for indentation
+        end
+
+        @info "Observation cluster centroids exported to: $cluster_file"
+    end
+
+    return filename
+end
+
+
+function SavePrunedPolicyDOT(fsc::FSC; outfile_name::Union{Nothing, String}=nothing)
+    # Decide output filename
+    filename = if outfile_name === nothing
+        timestamp = Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS")
+        "pruned_fsc_$(timestamp).dot"
+    else
+        "pruned_fsc_$(outfile_name).dot"
+    end
+
+    num_nodes = length(fsc._prunned_node_list)
+    node_list = fsc._prunned_node_list
+
+    # --- Write DOT file ---
+    open(filename, "w") do io
+        # Header
+        println(io, "digraph FSC {")
+        println(io, "    rankdir=LR;")  # Left to right layout
+        println(io, "    node [shape=circle];")
+        println(io)
+        
+        # For each node, collect transitions for best action
+        for n in node_list
+            node = fsc._nodes[n]
+            best_a = GetBestAction(node)
+            
+            # For each observation under best action, create an edge
+            for (pair, next_n) in fsc._eta[n]
+                if pair.first == best_a
+                    obs = pair.second
+                    
+                    # Format edge label
+                    label = "a=$(best_a), o=$(obs)"
+                    
+                    # Print edge: node -> next_node with label
+                    println(io, "    $n -> $next_n [label=\"$label\"];")
+                end
+            end
+        end
+        
+        println(io)
+        
+        # Add node labels with value information
+        for n in node_list
+            node = fsc._nodes[n]
+            best_a = GetBestAction(node)
+            value = node._V_node
+            visits = node._visits_node
+            
+            # Format node label: id | best_action | value
+            label = "n=$n\\na=$(best_a)\\nvisits=$(visits)"
+            
+            println(io, "    $n [label=\"$label\"];")
+        end
+        
+        # Footer
+        println(io, "}")
+    end
+    
+    @info "Pruned policy DOT file exported to: $filename"
+    
     return filename
 end
 

@@ -18,7 +18,7 @@ using RockSample
 pomdp = RockSamplePOMDP(7, 8)
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_b_gap = 0.2                # belief merging threshold
+    max_b_gap = 0.3                # belief merging threshold
 )
 
 fsc = solve(pomcgs, pomdp)
@@ -89,11 +89,39 @@ pomcgs = SolverPOMCGS(pomdp;
 )
 
 fsc = solve(pomcgs, pomdp)
+
 run_batch_simulations(pomdp, fsc; n_simulations=10000)
 ```
 
 For **LightDark**, POMCGS typically reaches a lower bound value > 3.0 within **10–30 seconds**.  
 Note: `state_grid` is required for continuous-state POMDPs to perform belief discretization.
+
+---
+### Tag
+
+```julia
+using POMCGraphSearch
+using POMDPs
+using TagPOMDPProblem
+
+
+
+pomdp = TagPOMDP()
+
+pomcgs = SolverPOMCGS(pomdp;
+    max_b_gap = 0.13,
+    max_search_depth = 60,
+    num_sim_per_sa = 10000
+)
+
+
+fsc = solve(pomcgs, pomdp)
+
+run_batch_simulations(pomdp, fsc; n_simulations=10000)
+
+```
+
+For **Tag** (default map), POMCGS can converge to a near optimal policy around -11.0 usually within **2 hours** of computation. 
 
 ---
 

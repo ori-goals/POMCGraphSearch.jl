@@ -4,7 +4,8 @@ mutable struct Planner
 	_nb_iter::Int64                              
 	_discount::Float64                           
 	_epsilon::Float64                            
-	_C_star::Int64								 
+	_C_star::Int64
+	_C_ucb::Float64								 
 	_max_search_depth::Int64					
 	_max_planning_secs::Float64                   
 	_nb_sim::Int64								 
@@ -68,6 +69,7 @@ function Simulate(model::Model,
 				max_depth::Int64,
 				discount::Float64,
 				C_star::Int64,
+				C_ucb::Float64,
 				epsilon::Float64,
 				Q_learning_policy::Qlearning,
 				lower_bound_policy::LowerBoundPolicy,
@@ -86,9 +88,9 @@ function Simulate(model::Model,
 
 
 	if bool_APW
-        a = ActionProgressiveWidening(fsc, nI, fsc._action_space, k_a, alpha_a, C_star)
+        a = ActionProgressiveWidening(fsc, nI, fsc._action_space, k_a, alpha_a, C_star, C_ucb)
     else
-        a = UcbActionSelection(fsc, nI, C_star)
+        a = UcbActionSelection(fsc, nI, C_star, C_ucb)
     end
 
 
@@ -117,6 +119,7 @@ function Simulate(model::Model,
 																max_depth, 
 																discount, 
 																C_star, 
+																C_ucb,
 																epsilon, 
 																Q_learning_policy, 
 																lower_bound_policy,
@@ -177,6 +180,7 @@ function MCGraphSearchPOMDP(model::Model,
 				planner._max_search_depth,
 				planner._discount,
 				planner._C_star,
+				planner._C_ucb,
 				planner._epsilon,
 				planner._Q_learning_policy,
 				planner._lower_bound_policy,
@@ -330,10 +334,11 @@ function SimulationOnline(model::Model,
 					fsc,
 					sample_key_from_weighted_dict(fsc._nodes[nI]._dict_weighted_samples),
 					nI,
-					step,
+					0,
 					planner._max_search_depth,
 					planner._discount,
 					planner._C_star,
+					planner._C_ucb,
 					planner._epsilon,
 					planner._Q_learning_policy,
 					planner._lower_bound_policy,
