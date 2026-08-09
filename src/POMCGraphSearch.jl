@@ -100,7 +100,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                     alpha_a::Float64 = 0.2,
                     bool_APW::Bool = false,
                     # Search Parameters
-                    max_search_depth::Int64 = 40,
+                    max_search_depth::Int64 = Int(ceil(log(0.01) / log(POMDPs.discount(pomdp)))), 
                     max_planning_secs::Float64 = 10000.0,
 					nb_sim_per_iter::Int64 = 1000,
                     nb_eval::Int64 = 100_00

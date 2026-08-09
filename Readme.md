@@ -19,7 +19,7 @@ The repository implements POMCGS, an offline planning algorithm that performs Mo
 | File | Description |
 |------|-------------|
 | `./POMCGraphSearch.jl` | Main POMCGS algorithm |
-| `./ModelWrapper.jl` |  Model wrapper for continuous domains |
+| `./ModelWrapper.jl` |  Model wrapper for continuous and discrete domains |
 | `./Planner.jl` | General POMCGS planner implementation |
 | `./FSC.jl` | Defines the FSC data structure used during planning |
 | `./Heuristic.jl` | Implements heuristic methods (upper and lower) |
@@ -51,7 +51,6 @@ pomdp = RockSamplePOMDP(7, 8)
 
 pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.3,                # belief merging threshold
-    max_search_depth = 30,          # maximum search depth
     num_sim_per_sa = 20 # simulations per action for a given state particle
 )
 
@@ -75,7 +74,6 @@ pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.2, 
     state_grid = [1.0, 1.0], # the state grid for state discretization
     num_fixed_observations = 20, # the number of observation clusters
-    max_search_depth = 30,
     num_sim_per_sa = 1000
 )  # Initialize the POMCGS solver. It will automatically use the continuous planner for this problem.
 
@@ -139,7 +137,7 @@ Users can further tune the behavior of the solver through the following core par
 | Parameter                   | Default  | Description                                                                                  |
 |------------------------------|----------|----------------------------------------------------------------------------------------------|
 | `max_b_gap`                  | `0.1`    | Belief merging threshold; controls granularity of the belief graph. *(0.1 = tight, larger = faster planning but coarser graph)* |
-| `max_search_depth`           | `50`     | Maximum search depth.                                                                       |
+| `max_search_depth`           | `min d` s.t. `γ^d < 0.01`     | Maximum search depth.                                                                       |
 | `num_sim_per_sa`             | `100`    | Number of simulations per action.                                                           |
 | `epsilon`                    | `0.1`    | Convergence threshold: stop when upper–lower bound gap < `epsilon`.                         |
 | `nb_particles`               | `10000`  | Number of particles sampled from the initial belief `b0`.                                   |

@@ -37,7 +37,6 @@ pomdp = RockSamplePOMDP(11, 11)
 
 pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.3,
-    max_search_depth = 40,
     num_sim_per_sa = 20
 )
 
@@ -56,7 +55,6 @@ pomdp = RockSamplePOMDP(15, 15)
 
 pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.4,
-    max_search_depth = 40,
     num_sim_per_sa = 20,
     max_planning_secs = 36000.0,
     nb_particles = 50000,
@@ -84,7 +82,6 @@ pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.15,
     state_grid = [1.0, 1.0],       # discretization for continuous states
     num_fixed_observations = 20,   # number of observation clusters
-    max_search_depth = 30,
     num_sim_per_sa = 1000
 )
 
@@ -110,7 +107,6 @@ pomdp = TagPOMDP()
 
 pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.13,
-    max_search_depth = 60,
     num_sim_per_sa = 10000
 )
 
@@ -145,7 +141,6 @@ pomdp = RoombaPOMDP(sensor=Lidar(),
     v_max=max_speed, sspace=sspace))
 
 pomcgs = SolverPOMCGS(pomdp;
-    max_search_depth = 40,
     max_b_gap = 0.2,
     bool_APW = true,
     num_fixed_observations = 10
@@ -179,7 +174,6 @@ pomdp = RoombaPOMDP(sensor=Bumper(),
     v_max=max_speed, sspace=sspace))
 
 pomcgs = SolverPOMCGS(pomdp;
-                max_search_depth = 80,
                 max_b_gap = 0.05,
                 bool_APW = true,
                 C_star = 1000,
