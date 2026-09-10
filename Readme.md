@@ -161,7 +161,6 @@ If initialization is too slow, inaccurate, or gives unexpected results, you can 
 | `nb_episode_size`  | `30`    | Number of iterations per episode in the Q-learning initialization. |
 | `VMDP_nb_max_episode`   | `20`    | Maximum number of episodes to run during initialization. |
 | `nb_samples_VMDP`  | `5000`  | Number of samples used to estimate the MDP value function. |
-| `nb_sim_VMDP`      | `10`    | Number of simulations per sample for value estimation. |
 | `epsilon_VMDP`     | `0.1`  | Convergence threshold for Q-learning value computation. |
 
 

@@ -45,7 +45,6 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
 	nb_episode_size::Int
 	VMDP_nb_max_episode::Int
     nb_samples_VMDP::Int
-	nb_sim_VMDP::Int
     epsilon_VMDP::Float64
     VMDP_b0_value::Float64
     # --- Parameters for the POMCGS planner ---
@@ -84,7 +83,6 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
 					nb_episode_size::Int = 30,
 					VMDP_nb_max_episode::Int = 30,
                     nb_samples_VMDP::Int = 5000,
-					nb_sim_VMDP::Int = 20,
                     epsilon_VMDP::Float64 = 0.1,
                     VMDP_b0_value::Float64 = 0.0,
                     # --- Planner defaults ---
@@ -177,7 +175,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
         println("Number of max episodes: ", VMDP_nb_max_episode)
 
 		# if state is discrete
-        b0_VMDP_value = TrainingEpisodes(Vmdp, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, model)
+        b0_VMDP_value = TrainingEpisodes(Vmdp, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, epsilon_VMDP, model)
 
 		VMDP_heuristic = Vmdp
         # Log result
@@ -232,7 +230,7 @@ mutable struct SolverPOMCGS{POMDP, ASpace, OSpace_discrete, S, A, O_discrete} <:
                           state_space_type,
                           observation_space_type, observation_space, num_fixed_observations, obs_cluster_model,
                           num_sim_per_sa, state_grid,
-                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, nb_sim_VMDP, epsilon_VMDP, b0_VMDP_value,
+                          VMDP_heuristic, nb_episode_size, VMDP_nb_max_episode, nb_samples_VMDP, epsilon_VMDP, b0_VMDP_value,
                           max_b_gap, max_graph_node_size, nb_iter,
                           POMDPs.discount(pomdp), epsilon, C_star, C_ucb, kmeans_itr, k_a, alpha_a, bool_APW,      
                           max_search_depth, max_planning_secs, nb_sim_per_iter, nb_eval, log_result, fsc, planner)

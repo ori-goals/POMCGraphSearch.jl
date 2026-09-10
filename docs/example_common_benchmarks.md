@@ -58,7 +58,6 @@ pomcgs = SolverPOMCGS(pomdp;
     num_sim_per_sa = 20,
     max_planning_secs = 36000.0,
     nb_particles = 50000,
-    nb_sim_VMDP = 50000,
     epsilon_VMDP = 0.01
 )
 

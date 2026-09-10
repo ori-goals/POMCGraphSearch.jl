@@ -75,22 +75,20 @@ function UpdateRmaxRmin(Q_learning_Policy::Qlearning, r::Float64)
 end
 
 
-function EstiValueQlearning(Q_learning_Policy::Qlearning, nb_sim::Int64, s_input::Int, model::Model, epsilon::Float64)
+function EstiValueQlearning(Q_learning_Policy::Qlearning, s_input::Int, model::Model, epsilon::Float64)
     a_selected = -1
     gamma = discount(model)
-    for i in nb_sim
-        step = 0
-        s = deepcopy(s_input)
-        while (gamma^step) > epsilon && isterminal(model, s) == false
-            a_selected = ChooseActionQlearning(Q_learning_Policy, s)
-            sp, o, r = Step(model, s, a_selected)
-            UpdateRmaxRmin(Q_learning_Policy, r)
-            old_Q = GetQ(Q_learning_Policy, s, a_selected) 
-            new_Q = old_Q + Q_learning_Policy._learning_rate * (r + gamma * MaxQ(Q_learning_Policy, sp) - old_Q)
-            Q_learning_Policy._Q_table[s][a_selected] = new_Q
-            s = sp
-            step += 1
-        end
+    step = 0
+    s = deepcopy(s_input)
+    while (gamma^step) > epsilon && isterminal(model, s) == false
+        a_selected = ChooseActionQlearning(Q_learning_Policy, s)
+        sp, o, r = Step(model, s, a_selected)
+        UpdateRmaxRmin(Q_learning_Policy, r)
+        old_Q = GetQ(Q_learning_Policy, s, a_selected) 
+        new_Q = old_Q + Q_learning_Policy._learning_rate * (r + gamma * MaxQ(Q_learning_Policy, sp) - old_Q)
+        Q_learning_Policy._Q_table[s][a_selected] = new_Q
+        s = sp
+        step += 1
     end
 
     return MaxQ(Q_learning_Policy, s_input)
@@ -110,7 +108,6 @@ function TrainingEpisodes(
     nb_episode_size::Int,
     nb_max_episode::Int,
     nb_samples_VMDP::Int,
-    nb_sim::Int,
     epsilon::Float64,
     model::Model
     )
@@ -130,7 +127,7 @@ function TrainingEpisodes(
         for i in 1:nb_episode_size
             for _ in 1:nb_samples_VMDP
                 s = rand(b0)
-                value_episode += EstiValueQlearning(global_policy, nb_sim, s, model, epsilon)
+                value_episode += EstiValueQlearning(global_policy, s, model, epsilon)
             end
         end
 
