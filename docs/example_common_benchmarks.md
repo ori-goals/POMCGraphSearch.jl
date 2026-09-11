@@ -38,7 +38,7 @@ pomdp = RockSamplePOMDP(11, 11)
 pomcgs = SolverPOMCGS(pomdp;
     max_b_gap = 0.3,
     num_sim_per_sa = 20,
-    nb_sample_VMDP=10000,
+    nb_samples_VMDP=10000,
     epsilon_VMDP = 0.01
 )
 
